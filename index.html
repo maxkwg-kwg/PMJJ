@@ -392,6 +392,7 @@ body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);
 </div>
 </section>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="config.js"></script>
 <script>
 /* Supabase adapter: gives the schedule code the same small db API it used on claude.ai
@@ -507,8 +508,11 @@ var VAT=0.07,COLL={bk:"bookings",sc:"successes"},TABNAME={view:"นัดดู�
 var NOTCOUNT={"ยกเลิก":1,"เลื่อนนัด":1,"ลูกค้าได้ห้องแล้ว":1};
 function r2(n){return Math.round(n*100)/100}
 function netOf(a){return r2(Number(a)/(1+VAT))}
+function baseOf(x){return Math.max(0,(Number(x.amount)||0)-(Number(x.disc)||0)-(Number(x.promo)||0))}
+function netRow(x){return r2(baseOf(x)/(1+VAT)*(1-(Number(x.coPct)||0)/100))}
+function vatRow(x){var b=baseOf(x);return r2(b-b/(1+VAT))}
 function fm(n,d){return Number(n).toLocaleString("en-US",{minimumFractionDigits:d==null?2:d,maximumFractionDigits:2})}
-function mTotals(list){var g=0,n=0,co=0;list.forEach(function(a){g+=Number(a.amount)||0;n+=netOf(a.amount||0);if(a.co)co++});n=r2(n);return{n:list.length,gross:r2(g),net:n,vat:r2(g-n),co:co}}
+function mTotals(list){var g=0,n=0,v=0,co=0;list.forEach(function(a){g+=Number(a.amount)||0;n+=netRow(a);v+=vatRow(a);if(a.co||Number(a.coPct)>0)co++});return{n:list.length,gross:r2(g),net:r2(n),vat:r2(v),co:co}}
 function sortMoney(a,b){return a.date<b.date?-1:a.date>b.date?1:(a.created||0)-(b.created||0)}
 function viewStats(list){
   var m={},total=0;
@@ -653,34 +657,46 @@ function renderTabs(){
 }
 function moneyHtml(kind){
   var list=(kind==="bk"?bk:sc).slice().sort(sortMoney),t=mTotals(list),L=TABNAME[kind];
-  var h='<div class="sum"><h2>รวม '+L+' สัปดาห์นี้<span>'+t.n+' รายการ</span></h2><div class="vcs"><span class="vc"><b>ยอดที่เข้า</b><span class="n">'+fm(t.gross)+'</span></span><span class="vc"><b>หลังหัก VAT 7%</b><span class="n">'+fm(t.net)+'</span></span><span class="vc"><b>VAT 7%</b><span class="n">'+fm(t.vat)+'</span></span><span class="vc"><b>Co-agent</b><span class="n">'+t.co+'</span></span></div></div>'+'<div class="mhead"><div><b>'+L+'</b> <span class="cnt">'+rangeLabel(ws)+' · หลังหัก VAT 7% = ยอด ÷ 1.07</span></div><button class="btn primary" data-madd="'+kind+'">+ เพิ่ม '+L+'</button></div>';
+  var h='<div class="sum"><h2>รวม '+L+' สัปดาห์นี้<span>'+t.n+' รายการ</span></h2><div class="vcs"><span class="vc"><b>ยอดที่เข้า</b><span class="n">'+fm(t.gross)+'</span></span><span class="vc"><b>หลังหัก VAT 7%</b><span class="n">'+fm(t.net)+'</span></span><span class="vc"><b>VAT 7%</b><span class="n">'+fm(t.vat)+'</span></span><span class="vc"><b>Co-agent</b><span class="n">'+t.co+'</span></span></div></div>'+'<div class="mhead"><div><b>'+L+'</b> <span class="cnt">'+rangeLabel(ws)+' · Net = (Commission − ส่วนลด − Promotion) ÷ 1.07 × (100% − % Co-agent)</span></div><div class="nav"><button class="btn" data-mxls="'+kind+'">'+(kind==="sc"?"ดึง Report ค่าคอม (Excel)":"Export Excel รายเดือน")+'</button><button class="btn primary" data-madd="'+kind+'">+ เพิ่ม '+L+'</button></div></div>';
   if(!db)h+='<div class="note">ล็อกอินด้วยบัญชีทีมก่อน จึงจะเห็นและแก้ไขได้</div>';
-  h+='<div class="tw"><table class="mt"><thead><tr><th>วัน</th><th>เซลล์</th><th>ลูกค้า / โครงการ</th><th class="num">ยอดที่เข้า (บาท)</th><th>Co-agent</th><th class="num">ยอดหลังหัก VAT 7%</th><th class="num">VAT 7%</th><th></th></tr></thead><tbody>';
+  h+='<div class="tw"><table class="mt"><thead><tr><th>วัน</th><th>เซลล์</th><th>ลูกค้า / โครงการ</th><th class="num">Commission เต็ม (บาท)</th><th>Co-agent</th><th class="num">Net หลังหัก VAT</th><th class="num">VAT 7%</th><th></th></tr></thead><tbody>';
   if(!list.length)h+='<tr><td colspan="8" class="cnt">ยังไม่มีรายการ'+(db?' กด "+ เพิ่ม '+L+'" เพื่อลงยอด':'')+'</td></tr>';
-  list.forEach(function(a){var net=netOf(a.amount||0);h+='<tr><td>'+dayLabel(parse(a.date))+'</td><td>'+esc(a.agent)+'</td><td>'+esc([a.cust?"K."+a.cust:"",a.proj].filter(Boolean).join(" · "))+'</td><td class="num">'+fm(a.amount||0)+'</td><td>'+(a.co?'<span class="co">Co-agent</span>':'ไม่ใช่')+'</td><td class="num">'+fm(net)+'</td><td class="num">'+fm(r2((a.amount||0)-net))+'</td><td><button class="ib" data-medit="'+esc(a.id)+'">แก้ไข</button></td></tr>'});
+  list.forEach(function(a){var net=netRow(a);h+='<tr><td>'+dayLabel(parse(a.date))+'</td><td>'+esc(a.agent)+'</td><td>'+esc([(a.dtype?a.dtype+" · ":"")+(a.cust?"K."+a.cust:""),a.proj].filter(Boolean).join(" · "))+'</td><td class="num">'+fm(a.amount||0)+'</td><td>'+((a.co||Number(a.coPct)>0)?'<span class="co">Co-agent'+(Number(a.coPct)>0?' '+a.coPct+'%':'')+'</span>':'ไม่ใช่')+'</td><td class="num">'+fm(net)+'</td><td class="num">'+fm(vatRow(a))+'</td><td><button class="ib" data-medit="'+esc(a.id)+'">แก้ไข</button></td></tr>'});
   h+='</tbody>'+(list.length?'<tfoot><tr><td colspan="3">รวม '+t.n+' รายการ (Co-agent '+t.co+')</td><td class="num">'+fm(t.gross)+'</td><td></td><td class="num">'+fm(t.net)+'</td><td class="num">'+fm(t.vat)+'</td><td></td></tr></tfoot>':'')+'</table></div>';
   return h;
 }
 function openMoney(kind,a,dateKey){
   var isNew=!a;formKind=kind;var L=TABNAME[kind];
-  form=a?Object.assign({},a):{date:dateKey||iso(ws),agent:"",cust:"",proj:"",amount:"",co:false};
+  form=a?Object.assign({},a):{date:dateKey||iso(ws),agent:"",dtype:"ขาย",cust:"",proj:"",amount:"",co:false};
   var dopts="";for(var i=0;i<7;i++){var d=addDays(ws,i);dopts+='<option value="'+iso(d)+'"'+(iso(d)===form.date?" selected":"")+'>'+dayLabel(d)+'</option>'}
-  $("#modal").innerHTML='<div class="back" id="back"><div class="modal" role="dialog" aria-modal="true" aria-label="'+L+'"><h3>'+(isNew?"เพิ่ม ":"แก้ไข ")+L+'</h3><div class="grid">'+
-   '<div class="fld"><label for="m-date">วัน</label><select id="m-date">'+dopts+'</select></div>'+
-   '<div class="fld"><label for="m-agent">เซลล์</label><select id="m-agent"><option value="">เลือกชื่อ</option>'+agentList(form.agent).filter(function(x){return x!==TEAM}).map(function(x){return '<option'+(x===form.agent?" selected":"")+'>'+esc(x)+'</option>'}).join("")+'</select></div>'+
-   '<div class="fld"><label for="m-cust">ลูกค้า (ไม่ต้องใส่ K.)</label><input id="m-cust" type="text" value="'+esc(form.cust)+'"></div>'+
-   '<div class="fld"><label for="m-proj">โครงการ</label><input id="m-proj" type="text" value="'+esc(form.proj)+'"></div>'+
-   '<div class="fld"><label for="m-amount">ยอดที่เข้า (บาท)</label><input id="m-amount" type="number" inputmode="decimal" min="0" step="any" value="'+esc(form.amount)+'"></div>'+
-   '<div class="fld"><label>Co-agent</label><div class="seg"><button type="button" data-co="0" aria-pressed="'+(!form.co)+'">ไม่ใช่</button><button type="button" data-co="1" aria-pressed="'+(!!form.co)+'">เป็น Co-agent</button></div></div>'+
-   '<div class="fld full"><label>ยอดหลังหัก VAT 7%</label><div class="prev" id="m-prev"></div></div></div>'+
+  var f=function(id,label,val,type,extra){return '<div class="fld'+(extra&&extra.full?' full':'')+'"'+(extra&&extra.attr?' '+extra.attr:'')+'><label for="'+id+'">'+label+'</label><input id="'+id+'" type="'+(type||"text")+'"'+(extra&&extra.list?' list="ag-list" autocomplete="off"':'')+''+(type==="number"?' inputmode="decimal" min="0" step="any"':'')+' value="'+esc(val==null?"":val)+'"></div>'};
+  $("#modal").innerHTML='<div class="back" id="back"><div class="modal" style="max-width:640px" role="dialog" aria-modal="true" aria-label="'+L+'"><h3>'+(isNew?"เพิ่ม ":"แก้ไข ")+L+'</h3><div class="grid">'+
+   '<div class="fld"><label>ประเภทดีล</label><div class="seg"><button type="button" data-dt="ขาย" aria-pressed="'+(form.dtype!=="เช่า")+'">ขาย</button><button type="button" data-dt="เช่า" aria-pressed="'+(form.dtype==="เช่า")+'">เช่า</button></div></div>'+
+   '<div class="fld"><label for="m-agent">เซลล์ (เจ้าของรายงาน)</label><select id="m-agent"><option value="">เลือกชื่อ</option>'+agentList(form.agent).filter(function(x){return x!==TEAM}).map(function(x){return '<option'+(x===form.agent?" selected":"")+'>'+esc(x)+'</option>'}).join("")+'</select></div>'+
+   '<div class="fld"><label for="m-date">วันที่ทำสัญญา</label><select id="m-date">'+dopts+'</select></div>'+
+   f("m-xfer","วันโอน (เคสขาย)",form.xfer,"date",{attr:'data-only="ขาย"'})+
+   f("m-term","ระยะเวลาสัญญา (เคสเช่า) เช่น 1 ปี",form.term,"text",{attr:'data-only="เช่า"'})+
+   f("m-cid","Contract ID",form.cid)+f("m-cx","รหัส CX",form.cx)+
+   f("m-proj","โครงการ",form.proj,"text",{full:1})+
+   f("m-price","ราคา (บาท)",form.price,"number")+f("m-phone","เบอร์โทรลูกค้า",form.phone)+
+   f("m-cust","ชื่อลูกค้า (ไม่ต้องใส่ K.)",form.cust,"text",{full:1})+
+   f("m-amount","Commission เต็ม รวม VAT (บาท)",form.amount,"number")+f("m-disc","ส่วนลดค่าคอม (บาท)",form.disc,"number")+
+   f("m-promo","Promotion ลูกค้า (บาท)",form.promo,"number")+f("m-copct","% แบ่ง Co-agent (ไม่มีเว้นว่าง)",form.coPct,"number")+
+   f("m-sale","Sale",form.sale,"text",{list:1})+f("m-stock","Stock",form.stock,"text",{list:1})+f("m-pm","PM",form.pm,"text",{list:1})+
+   '<datalist id="ag-list">'+agentList().filter(function(x){return x!==TEAM}).map(function(x){return '<option value="'+esc(x)+'">'}).join("")+'</datalist>'+f("m-note","หมายเหตุอื่น",form.note)+'<p class="help full" style="grid-column:1/-1;margin:0">Sale / Stock / PM จะไปอยู่ในช่องหมายเหตุของรายงาน เช่น Sale: Book / Stock: Max / Pm: -</p>'+
+   '<div class="fld full"><label>Net Commission เข้าบริษัท</label><div class="prev" id="m-prev"></div></div></div>'+
    '<div class="mact">'+(isNew?'':'<button class="btn danger left" id="mdel">ลบรายการนี้</button>')+'<button class="btn" id="cancel">ยกเลิก</button><button class="btn primary" id="msave">บันทึก</button></div></div></div>';
-  readMoney();setTimeout(function(){var f=$(isNew?"#m-agent":"#m-amount");f&&f.focus()},0);
+  readMoney();setTimeout(function(){var el=$(isNew?"#m-agent":"#m-amount");el&&el.focus()},0);
 }
 function readMoney(){
-  form.date=$("#m-date").value;form.agent=$("#m-agent").value;form.cust=$("#m-cust").value.trim().replace(/^K[.'’]?\s*/i,"");form.proj=$("#m-proj").value.trim();
-  var v=$("#m-amount").value;form.amount=v===""?"":Number(v);
-  if(form.amount===""||isNaN(form.amount))$("#m-prev").textContent="ใส่ยอดที่เข้าเพื่อดูยอดหลังหัก VAT";
-  else{var n=netOf(form.amount);$("#m-prev").textContent="฿"+fm(n)+"  (VAT 7% = ฿"+fm(r2(form.amount-n))+")"}
+  var num=function(id){var v=$(id).value;return v===""?"":Number(v)},txt=function(id){return $(id).value.trim()};
+  form.date=$("#m-date").value;form.agent=$("#m-agent").value;form.cust=txt("#m-cust").replace(/^K[.'’]?\s*/i,"");form.proj=txt("#m-proj");
+  form.xfer=$("#m-xfer").value;form.term=txt("#m-term");form.cid=txt("#m-cid");form.cx=txt("#m-cx");form.phone=txt("#m-phone");
+  form.price=num("#m-price");form.amount=num("#m-amount");form.disc=num("#m-disc");form.promo=num("#m-promo");form.coPct=num("#m-copct");
+  form.sale=txt("#m-sale");form.stock=txt("#m-stock");form.pm=txt("#m-pm");form.note=txt("#m-note");form.co=Number(form.coPct)>0;
+  document.querySelectorAll("#modal [data-only]").forEach(function(el){el.style.display=el.getAttribute("data-only")===(form.dtype||"ขาย")?"":"none"});
+  if(form.amount===""||isNaN(form.amount))$("#m-prev").textContent="ใส่ Commission เต็ม เพื่อดูยอด Net";
+  else $("#m-prev").textContent="฿"+fm(netRow(form))+"  (VAT 7% = ฿"+fm(vatRow(form))+")";
 }
 function readAny(){formKind==="appt"?readForm():readMoney()}
 function closeForm(){$("#modal").innerHTML="";form=null;managing=false}
@@ -764,6 +780,83 @@ async function saveJpg(){
   catch(e){if(!e||e.code!=="declined")toast("บันทึกไฟล์ไม่สำเร็จ ลองคลิกขวาที่รูปแล้วบันทึกรูปภาพ")}
 }
 
+
+/* Excel export (Booking / Success) — layout of the company commission report */
+var TH_MS=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+function meName(){var w=document.getElementById("whoName");var v=w?w.textContent.trim():"";var hit=AGENTS.filter(function(x){return x.toLowerCase()===v.toLowerCase()})[0];return hit||""}
+function fullNameOf(n){try{return localStorage.getItem("jj_full_"+n)||""}catch(e){return""}}
+function openExport(kind){
+  managing=true;var mid=addDays(ws,3),mv=mid.getFullYear()+"-"+pad(mid.getMonth()+1);
+  var names=AGENTS.filter(function(x){return x!==TEAM}),me=meName();
+  $("#modal").innerHTML='<div class="back" id="back"><div class="modal" role="dialog" aria-modal="true" aria-label="Export Excel"><h3>ดึงรายงาน '+esc(TABNAME[kind])+' เป็น Excel</h3><div class="grid">'+
+   '<input type="hidden" id="x-kind" value="'+kind+'">'+
+   '<div class="fld"><label for="x-month">ประจำเดือน</label><input id="x-month" type="month" value="'+mv+'"></div>'+
+   '<div class="fld"><label for="x-agent">รายงานของ</label><select id="x-agent">'+names.map(function(x){return '<option'+(x===me?" selected":"")+'>'+esc(x)+'</option>'}).join("")+'<option value="">ทุกคน (แยกชีตละคน)</option></select></div>'+
+   '<div class="fld full"><label for="x-full">ชื่อ-นามสกุลในรายงาน (เช่น นายรัฐธรรม ภาคนาม)</label><input id="x-full" type="text" value="'+esc(fullNameOf(me||names[0]))+'"></div>'+
+   '<div class="fld full"><label for="x-basis">นับรายการตาม</label><select id="x-basis"><option value="date">วันที่ทำสัญญา</option><option value="xfer">วันโอน (เคสขาย)</option></select></div>'+
+   '</div><p class="help">รายงานของแต่ละคนรวมทุกดีลที่เขาเป็นเซลล์เจ้าของรายการ หรือมีชื่อเป็น Sale / Stock / PM</p><div class="mact"><button class="btn" id="cancel">ยกเลิก</button><button class="btn primary" id="xgo">ดาวน์โหลด Excel</button></div></div></div>';
+}
+function involves(x,name){
+  if(!name)return true;if(x.agent===name)return true;
+  var re=new RegExp("(^|[^A-Za-z0-9ก-๙])"+name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"($|[^A-Za-z0-9ก-๙])","i");
+  return [x.sale,x.stock,x.pm].some(function(v){return v&&re.test(String(v))});
+}
+function beDate(isoStr){if(!isoStr)return"";var p=isoStr.split("-");return Number(p[2])+"/"+Number(p[1])+"/"+(Number(p[0])+543)}
+async function exportXlsx(kind,month,agent,fullName,basis){
+  basis=basis||"date";if(agent&&fullName!=null){try{localStorage.setItem("jj_full_"+agent,fullName)}catch(e){}}
+  if(!window.ExcelJS){toast("โหลดตัวสร้าง Excel ไม่สำเร็จ ลองรีเฟรชหน้า");return}
+  if(!db){toast("ยังไม่ได้ล็อกอิน");return}
+  var y=Number(month.split("-")[0]),m=Number(month.split("-")[1])-1,a=iso(new Date(y,m,1)),b=iso(new Date(y,m+1,0));
+  var q=db.collection(COLL[kind]).where(basis,">=",a).where(basis,"<=",b),list;
+  try{list=q._fetch?(await q._fetch()).map(function(r){var o=Object.assign({},r.data);o.id=r.id;return o}):(kind==="bk"?bk:sc).filter(function(x){return x[basis]>=a&&x[basis]<=b})}catch(e){toast("ดึงข้อมูลไม่สำเร็จ ลองอีกครั้ง");return}
+  if(agent)list=list.filter(function(x){return involves(x,agent)});
+  list.sort(sortMoney);
+  if(!list.length){toast("ไม่มีรายการ "+TABNAME[kind]+" ใน "+TH_MS[m]+" "+(y+543));return}
+  var groups={};
+  if(agent)groups[agent]=list;
+  else list.forEach(function(x){(groups[x.agent||"-"]=groups[x.agent||"-"]||[]).push(x)});
+  var wb=new ExcelJS.Workbook();
+  var FONT={name:"Cordia New",size:16},thin={style:"thin"},BOX={top:thin,left:thin,bottom:thin,right:thin};
+  var ACC='_(* #,##0_);_(* \\(#,##0\\);_(* "-"??_);_(@_)';
+  var widths=[13.2,17.9,14.7,16,13,14.5,42.7,16.7,33.6,21.7,17.4,15.7,16.2,16,16.7,25.7,61.4];
+  var heads=["ประเภทดีล\n (ขาย/เช่า)","วันที่ทำสัญญา","วันโอน \n(กรณีเคสขาย)","ระยะเวลาสัญญา\n (กรณีเคสเช่า)","Contract ID","รหัส CX","โครงการ","ราคา","ชื่อลูกค้า","เบอร์โทร","Commission เต็ม","VAT 7%","ส่วนลดค่าคอม","Promotion ลูกค้า","% แบ่ง Co-agent","Net Commission เข้าบริษัท","หมายเหตุ"];
+  var title=kind==="sc"?"รายงานสรุปค่าคอมมิชชั่น":"รายงานสรุป Booking";
+  Object.keys(groups).forEach(function(name){
+    var sh=wb.addWorksheet(String(name).slice(0,31).replace(/[\\\/\?\*\[\]:]/g," "));
+    widths.forEach(function(w,i){sh.getColumn(i+1).width=w});
+    sh.mergeCells("A1:Q1");var c=sh.getCell("A1");c.value=title;c.font=FONT;c.alignment={horizontal:"center",vertical:"middle"};sh.getRow(1).height=38.25;
+    sh.getCell("A3").value="ชื่อเซลล์";sh.mergeCells("B3:E3");sh.getCell("B3").value=(agent&&fullName)?fullName:(fullNameOf(name)||name);
+    sh.getCell("G3").value="ประจำเดือน";sh.mergeCells("H3:I3");var hc=sh.getCell("H3");hc.value=TH_MS[m]+" "+(y+543);
+    ["A3","B3","G3","H3"].forEach(function(k){sh.getCell(k).font=FONT});
+    heads.forEach(function(h,i){var col=String.fromCharCode(65+i);sh.mergeCells(col+"5:"+col+"6");var hc=sh.getCell(col+"5");hc.value=h;hc.font=FONT;
+      hc.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFFFC000"}};hc.alignment={horizontal:"center",vertical:"middle",wrapText:true};hc.border=BOX;sh.getCell(col+"6").border=BOX});
+    sh.getRow(5).height=22.5;sh.getRow(6).height=22.5;
+    var r=7;
+    groups[name].forEach(function(x){
+      var rem=["Sale: "+(x.sale||"-"),"Stock: "+(x.stock||"-"),"Pm: "+(x.pm||"-")].join(" / ")+(x.note?" / "+x.note:"");
+      var vals=[x.dtype||"ขาย",beDate(x.date),x.dtype==="เช่า"?"":beDate(x.xfer),x.dtype==="เช่า"?(x.term||""):"",x.cid||"",x.cx||"",x.proj||"",
+        x.price===""||x.price==null?null:Number(x.price),x.cust||"",x.phone||"",Number(x.amount)||0,vatRow(x),
+        x.disc===""||x.disc==null?null:Number(x.disc),x.promo===""||x.promo==null?null:Number(x.promo),
+        x.coPct===""||x.coPct==null||Number(x.coPct)===0?null:Number(x.coPct)/100,netRow(x),rem];
+      var row=sh.getRow(r);
+      vals.forEach(function(v,i){var cell=row.getCell(i+1);cell.value=v;cell.font=FONT;cell.border=BOX;cell.alignment={vertical:"middle"}});
+      [8,11,13,14].forEach(function(i){row.getCell(i).numFmt=ACC});
+      [12,16].forEach(function(i){row.getCell(i).numFmt="#,##0.00"});
+      row.getCell(15).numFmt="0%";
+      r++;
+    });
+    var tot=mTotals(groups[name]),tr=sh.getRow(r);
+    tr.getCell(1).value="รวม "+tot.n+" รายการ";
+    tr.getCell(11).value=tot.gross;tr.getCell(12).value=tot.vat;tr.getCell(16).value=tot.net;
+    for(var ci=1;ci<=17;ci++){var tc=tr.getCell(ci);tc.font={name:FONT.name,size:FONT.size,bold:true};tc.border=BOX;tc.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFFFF2CC"}}}
+    tr.getCell(11).numFmt=ACC;tr.getCell(12).numFmt="#,##0.00";tr.getCell(16).numFmt="#,##0.00";
+  });
+  var buf=await wb.xlsx.writeBuffer();
+  var url=URL.createObjectURL(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  var aEl=document.createElement("a");aEl.href=url;aEl.download=(kind==="sc"?"Commission":"Booking")+"_"+(agent||"ทีมจ๊ะจ๋า")+"_"+TH_MS[m]+(y+543)+".xlsx";
+  document.body.appendChild(aEl);aEl.click();aEl.remove();setTimeout(function(){URL.revokeObjectURL(url)},4000);
+  closeForm();toast("Export แล้ว");
+}
 /* events */
 document.addEventListener("click",function(e){
   var t=e.target;
@@ -772,13 +865,16 @@ document.addEventListener("click",function(e){
   if(t.id==="savejpg"){saveJpg();return}
   var tb=t.closest("[data-tab]");if(tb){tab=tb.getAttribute("data-tab");render();return}
   var ma=t.closest("[data-madd]");if(ma){openMoney(ma.getAttribute("data-madd"),null);return}
+  var mx=t.closest("[data-mxls]");if(mx){openExport(mx.getAttribute("data-mxls"));return}
+  if(t.id==="xgo"){exportXlsx($("#x-kind").value,$("#x-month").value,$("#x-agent").value,$("#x-full").value.trim(),$("#x-basis").value);return}
   var me=t.closest("[data-medit]");if(me){var it=(tab==="bk"?bk:sc).find(function(x){return x.id===me.getAttribute("data-medit")});if(it)openMoney(tab,it);return}
+  var dt=t.closest("[data-dt]");if(dt&&form&&formKind!=="appt"){form.dtype=dt.getAttribute("data-dt");document.querySelectorAll("[data-dt]").forEach(function(x){x.setAttribute("aria-pressed",String(x===dt))});readMoney();return}
   var co=t.closest("[data-co]");if(co&&form&&formKind!=="appt"){form.co=co.getAttribute("data-co")==="1";document.querySelectorAll("[data-co]").forEach(function(x){x.setAttribute("aria-pressed",String(x===co))});return}
   if(t.id==="msave"){
     readMoney();
     if(!form.agent){toast("เลือกเซลล์ก่อน");return}
-    if(form.amount===""||isNaN(form.amount)||form.amount<=0){toast("ใส่ยอดที่เข้า");return}
-    var mid=form.id,mp={date:form.date,agent:form.agent,cust:form.cust,proj:form.proj,amount:form.amount,co:!!form.co};
+    if(form.amount===""||isNaN(form.amount)||form.amount<=0){toast("ใส่ Commission เต็ม");return}
+    var mid=form.id,mp={date:form.date,agent:form.agent,dtype:form.dtype||"ขาย",xfer:form.xfer||"",term:form.term||"",cid:form.cid||"",cx:form.cx||"",proj:form.proj,price:form.price,cust:form.cust,phone:form.phone||"",amount:form.amount,disc:form.disc,promo:form.promo,coPct:form.coPct,co:!!form.co,sale:form.sale||"",stock:form.stock||"",pm:form.pm||"",note:form.note||""};
     t.disabled=true;
     save(mid,mp,COLL[formKind]).then(function(ok){if(ok){closeForm();toast("บันทึกแล้ว")}else t.disabled=false});return;
   }
@@ -810,6 +906,7 @@ document.addEventListener("input",function(e){if(form&&e.target.closest("#modal"
 document.addEventListener("change",function(e){
   var t=e.target;
   if(t.id==="agentf"){fAgent=t.value;render();return}
+  if(t.id==="x-agent"){$("#x-full").value=fullNameOf(t.value);return}
   if(form&&t.closest("#modal")){readAny();return}
   var row=t.closest(".row");if(!row)return;var id=row.getAttribute("data-id");
   if(t.hasAttribute("data-st")){t.className="tone-"+(TONE[t.value]||"mute");save(id,{status:t.value}).then(function(ok){if(ok)toast("อัพเดตสถานะแล้ว")})}
