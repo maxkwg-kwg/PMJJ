@@ -141,6 +141,8 @@ body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);
 .vs .mt td{padding:9px 12px;border-top:1px solid var(--line);vertical-align:top}
 .vs .mt .num{text-align:right;font-family:var(--f-mono);white-space:nowrap;font-variant-numeric:tabular-nums}
 .vs .mt tfoot td{font-weight:600;background:var(--field)}
+.vs .done{background:var(--good-bg);color:var(--good-fg);border-radius:99px;padding:2px 9px;font-size:12px;font-weight:500}
+.vs .ib.go{border-color:var(--accent);color:var(--accent);font-weight:600}
 .vs .co{background:var(--viol-bg);color:var(--viol-fg);border-radius:99px;padding:1px 9px;font-size:12px}
 .vs .mhead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .vs .note{padding:12px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);margin-bottom:12px}
@@ -489,7 +491,7 @@ var AGENTS=DEFAULT_AGENTS.concat([TEAM]);
 var managing=false;
 function agentList(cur){var l=AGENTS.slice();if(cur&&l.indexOf(cur)<0)l.push(cur);return l}
 function uniqAgents(rows){var n=[];rows.forEach(function(a){if(n.indexOf(a.agent)<0)n.push(a.agent)});return n}
-var ACTS=["View","Furlist","Sign","Sign+Movein","โอน","ประเมิน","รับใบปลอดหนี้","เซ็นสัญญา","ประชุม","อื่นๆ"];
+var ACTS=["View","Furlist","Sign","Sign+Movein","Move in","โอน","ประเมิน","รับใบปลอดหนี้","เซ็นสัญญา","ประชุม","อื่นๆ"];
 var STAT=[["นัดแล้ว","info"],["รอคอนเฟิร์ม","wait"],["รออัพเดตผล","warn"],["ไปดูแล้ว: สนใจ","good"],["ไปดูแล้ว: คิดดูก่อน","wait"],["ไปดูแล้ว: ไม่สนใจ","mute"],["จอง/ทำสัญญาแล้ว","strong"],["เลื่อนนัด","viol"],["ยกเลิก","mute"],["ลูกค้าได้ห้องแล้ว","mute"],["เสร็จแล้ว","mute"]];
 var TONE={};STAT.forEach(function(s){TONE[s[0]]=s[1]});
 var DN=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],MN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -661,16 +663,16 @@ function moneyHtml(kind){
   if(!db)h+='<div class="note">ล็อกอินด้วยบัญชีทีมก่อน จึงจะเห็นและแก้ไขได้</div>';
   h+='<div class="tw"><table class="mt"><thead><tr><th>วัน</th><th>เซลล์</th><th>ลูกค้า / โครงการ</th><th class="num">Commission เต็ม (บาท)</th><th>Co-agent</th><th class="num">Net หลังหัก VAT</th><th class="num">VAT 7%</th><th></th></tr></thead><tbody>';
   if(!list.length)h+='<tr><td colspan="8" class="cnt">ยังไม่มีรายการ'+(db?' กด "+ เพิ่ม '+L+'" เพื่อลงยอด':'')+'</td></tr>';
-  list.forEach(function(a){var net=netRow(a);h+='<tr><td>'+dayLabel(parse(a.date))+'</td><td>'+esc(a.agent)+'</td><td>'+esc([(a.dtype?a.dtype+" · ":"")+(a.cust?"K."+a.cust:""),a.proj].filter(Boolean).join(" · "))+'</td><td class="num">'+fm(a.amount||0)+'</td><td>'+((a.co||Number(a.coPct)>0)?'<span class="co">Co-agent'+(Number(a.coPct)>0?' '+a.coPct+'%':'')+'</span>':'ไม่ใช่')+'</td><td class="num">'+fm(net)+'</td><td class="num">'+fm(vatRow(a))+'</td><td><button class="ib" data-medit="'+esc(a.id)+'">แก้ไข</button></td></tr>'});
+  list.forEach(function(a){var net=netRow(a);h+='<tr><td>'+dayLabel(parse(a.date))+'</td><td>'+esc(a.agent)+'</td><td>'+esc([(a.dtype?a.dtype+" · ":"")+(a.cust?"K."+a.cust:""),a.proj].filter(Boolean).join(" · "))+'</td><td class="num">'+fm(a.amount||0)+'</td><td>'+((a.co||Number(a.coPct)>0)?'<span class="co">Co-agent'+(Number(a.coPct)>0?' '+a.coPct+'%':'')+'</span>':'ไม่ใช่')+'</td><td class="num">'+fm(net)+'</td><td class="num">'+fm(vatRow(a))+'</td><td style="white-space:nowrap">'+(kind==="bk"?(a.converted?'<span class="done">✓ Success แล้ว</span> ':'<button class="ib go" data-tosc="'+esc(a.id)+'">→ Success</button> '):'')+(kind==="sc"&&a.fromBk?'<span class="done">จาก Booking</span> ':'')+'<button class="ib" data-medit="'+esc(a.id)+'">แก้ไข</button></td></tr>'});
   h+='</tbody>'+(list.length?'<tfoot><tr><td colspan="3">รวม '+t.n+' รายการ (Co-agent '+t.co+')</td><td class="num">'+fm(t.gross)+'</td><td></td><td class="num">'+fm(t.net)+'</td><td class="num">'+fm(t.vat)+'</td><td></td></tr></tfoot>':'')+'</table></div>';
   return h;
 }
-function openMoney(kind,a,dateKey){
+function openMoney(kind,a,dateKey,prefill){
   var isNew=!a;formKind=kind;var L=TABNAME[kind];
-  form=a?Object.assign({},a):{date:dateKey||iso(ws),agent:"",dtype:"ขาย",cust:"",proj:"",amount:"",co:false};
+  form=a?Object.assign({},a):Object.assign({date:dateKey||iso(ws),agent:"",dtype:"ขาย",cust:"",proj:"",amount:"",co:false},prefill||{});
   var dopts="";for(var i=0;i<7;i++){var d=addDays(ws,i);dopts+='<option value="'+iso(d)+'"'+(iso(d)===form.date?" selected":"")+'>'+dayLabel(d)+'</option>'}
   var f=function(id,label,val,type,extra){return '<div class="fld'+(extra&&extra.full?' full':'')+'"'+(extra&&extra.attr?' '+extra.attr:'')+'><label for="'+id+'">'+label+'</label><input id="'+id+'" type="'+(type||"text")+'"'+(extra&&extra.list?' list="ag-list" autocomplete="off"':'')+''+(type==="number"?' inputmode="decimal" min="0" step="any"':'')+' value="'+esc(val==null?"":val)+'"></div>'};
-  $("#modal").innerHTML='<div class="back" id="back"><div class="modal" style="max-width:640px" role="dialog" aria-modal="true" aria-label="'+L+'"><h3>'+(isNew?"เพิ่ม ":"แก้ไข ")+L+'</h3><div class="grid">'+
+  $("#modal").innerHTML='<div class="back" id="back"><div class="modal" style="max-width:640px" role="dialog" aria-modal="true" aria-label="'+L+'"><h3>'+(isNew?"เพิ่ม ":"แก้ไข ")+L+'</h3>'+(isNew&&form.fromBk?'<p class="help" style="margin:-4px 0 12px">ดึงข้อมูลจาก Booking มาให้แล้ว เช็กวันที่ทำสัญญาและยอด Commission ก่อนบันทึก</p>':'')+'<div class="grid">'+
    '<div class="fld"><label>ประเภทดีล</label><div class="seg"><button type="button" data-dt="ขาย" aria-pressed="'+(form.dtype!=="เช่า")+'">ขาย</button><button type="button" data-dt="เช่า" aria-pressed="'+(form.dtype==="เช่า")+'">เช่า</button></div></div>'+
    '<div class="fld"><label for="m-agent">เซลล์ (เจ้าของรายงาน)</label><select id="m-agent"><option value="">เลือกชื่อ</option>'+agentList(form.agent).filter(function(x){return x!==TEAM}).map(function(x){return '<option'+(x===form.agent?" selected":"")+'>'+esc(x)+'</option>'}).join("")+'</select></div>'+
    '<div class="fld"><label for="m-date">วันที่ทำสัญญา</label><select id="m-date">'+dopts+'</select></div>'+
@@ -873,6 +875,10 @@ document.addEventListener("click",function(e){
   var ma=t.closest("[data-madd]");if(ma){openMoney(ma.getAttribute("data-madd"),null);return}
   var mx=t.closest("[data-mxls]");if(mx){openExport(mx.getAttribute("data-mxls"));return}
   if(t.id==="xgo"){exportXlsx($("#x-kind").value,$("#x-month").value,$("#x-agent").value,$("#x-full").value.trim(),$("#x-basis").value);return}
+  var ts=t.closest("[data-tosc]");if(ts){var b0=bk.find(function(x){return x.id===ts.getAttribute("data-tosc")});if(b0){
+    var pre=Object.assign({},b0);["id","created","converted","scDate"].forEach(function(k){delete pre[k]});pre.fromBk=b0.id;
+    var td=iso(new Date()),inW=td>=iso(ws)&&td<=iso(addDays(ws,6));pre.date=inW?td:(b0.date||iso(ws));
+    openMoney("sc",null,pre.date,pre)}return}
   var me=t.closest("[data-medit]");if(me){var it=(tab==="bk"?bk:sc).find(function(x){return x.id===me.getAttribute("data-medit")});if(it)openMoney(tab,it);return}
   var dt=t.closest("[data-dt]");if(dt&&form&&formKind!=="appt"){form.dtype=dt.getAttribute("data-dt");document.querySelectorAll("[data-dt]").forEach(function(x){x.setAttribute("aria-pressed",String(x===dt))});readMoney();return}
   var co=t.closest("[data-co]");if(co&&form&&formKind!=="appt"){form.co=co.getAttribute("data-co")==="1";document.querySelectorAll("[data-co]").forEach(function(x){x.setAttribute("aria-pressed",String(x===co))});return}
@@ -881,8 +887,15 @@ document.addEventListener("click",function(e){
     if(!form.agent){toast("เลือกเซลล์ก่อน");return}
     if(form.amount===""||isNaN(form.amount)||form.amount<=0){toast("ใส่ Commission เต็ม");return}
     var mid=form.id,mp={date:form.date,agent:form.agent,dtype:form.dtype||"ขาย",xfer:form.xfer||"",term:form.term||"",cid:form.cid||"",cx:form.cx||"",proj:form.proj,price:form.price,cust:form.cust,phone:form.phone||"",amount:form.amount,disc:form.disc,promo:form.promo,coPct:form.coPct,co:!!form.co,sale:form.sale||"",stock:form.stock||"",pm:form.pm||"",note:form.note||""};
+    if(formKind==="sc"&&form.fromBk)mp.fromBk=form.fromBk;
     t.disabled=true;
-    save(mid,mp,COLL[formKind]).then(function(ok){if(ok){closeForm();toast("บันทึกแล้ว")}else t.disabled=false});return;
+    var srcBk=(!mid&&formKind==="sc"&&form.fromBk)?form.fromBk:null,sDate=form.date;
+    save(mid,mp,COLL[formKind]).then(function(ok){
+      if(!ok){t.disabled=false;return}
+      closeForm();
+      if(srcBk)save(srcBk,{converted:true,scDate:sDate},COLL.bk).then(function(ok2){toast(ok2?"ย้ายเป็น Success แล้ว":"บันทึก Success แล้ว แต่ทำเครื่องหมายที่ Booking ไม่สำเร็จ")});
+      else toast("บันทึกแล้ว");
+    });return;
   }
   if(t.id==="mdel"){
     if(t.getAttribute("data-sure")!=="1"){t.setAttribute("data-sure","1");t.textContent="กดอีกครั้งเพื่อยืนยันลบ";return}
