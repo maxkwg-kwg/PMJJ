@@ -1,6 +1,5 @@
-// ใส่ค่าจาก Supabase: Project Settings > API
-// anon key ใส่ในหน้าเว็บได้ ข้อมูลถูกป้องกันด้วย Row Level Security (ไฟล์ supabase/schema.sql)
+// ค่าจาก Supabase: Project Settings > API Keys
 window.JJ_CONFIG = {
-  SUPABASE_URL: "https://YOUR-PROJECT.supabase.co",
-  SUPABASE_ANON_KEY: "YOUR-ANON-KEY"
+  SUPABASE_URL: "https://rtqzzayfcpsgkncziyya.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_QpZv1TnVrzimAnADlB-iUg_aMOpmPci"
 };
