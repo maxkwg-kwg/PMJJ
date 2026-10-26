@@ -786,32 +786,37 @@ var TH_MS=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.
 function meName(){var w=document.getElementById("whoName");var v=w?w.textContent.trim():"";var hit=AGENTS.filter(function(x){return x.toLowerCase()===v.toLowerCase()})[0];return hit||""}
 function fullNameOf(n){try{return localStorage.getItem("jj_full_"+n)||""}catch(e){return""}}
 function openExport(kind){
-  managing=true;var mid=addDays(ws,3),mv=mid.getFullYear()+"-"+pad(mid.getMonth()+1);
+  managing=true;var now=new Date(),inWeek=iso(now)>=iso(ws)&&iso(now)<=iso(addDays(ws,6)),mv=cycleMonthFor(inWeek?now:addDays(ws,3));
   var names=AGENTS.filter(function(x){return x!==TEAM}),me=meName();
   $("#modal").innerHTML='<div class="back" id="back"><div class="modal" role="dialog" aria-modal="true" aria-label="Export Excel"><h3>ดึงรายงาน '+esc(TABNAME[kind])+' เป็น Excel</h3><div class="grid">'+
    '<input type="hidden" id="x-kind" value="'+kind+'">'+
-   '<div class="fld"><label for="x-month">ประจำเดือน</label><input id="x-month" type="month" value="'+mv+'"></div>'+
+   '<div class="fld"><label for="x-month">รอบค่าคอมเดือน</label><input id="x-month" type="month" value="'+mv+'"><small class="cnt" id="x-range"></small></div>'+
    '<div class="fld"><label for="x-agent">รายงานของ</label><select id="x-agent">'+names.map(function(x){return '<option'+(x===me?" selected":"")+'>'+esc(x)+'</option>'}).join("")+'<option value="">ทุกคน (แยกชีตละคน)</option></select></div>'+
    '<div class="fld full"><label for="x-full">ชื่อ-นามสกุลในรายงาน (เช่น นายรัฐธรรม ภาคนาม)</label><input id="x-full" type="text" value="'+esc(fullNameOf(me||names[0]))+'"></div>'+
    '<div class="fld full"><label for="x-basis">นับรายการตาม</label><select id="x-basis"><option value="date">วันที่ทำสัญญา</option><option value="xfer">วันโอน (เคสขาย)</option></select></div>'+
-   '</div><p class="help">รายงานของแต่ละคนรวมทุกดีลที่เขาเป็นเซลล์เจ้าของรายการ หรือมีชื่อเป็น Sale / Stock / PM</p><div class="mact"><button class="btn" id="cancel">ยกเลิก</button><button class="btn primary" id="xgo">ดาวน์โหลด Excel</button></div></div></div>';
+   '</div><p class="help">รอบค่าคอมตัดทุกวันที่ 25 เช่น รอบ ต.ค. = 26 ก.ย. – 25 ต.ค. รายงานของแต่ละคนรวมทุกดีลที่เขาเป็นเซลล์เจ้าของรายการ หรือมีชื่อเป็น Sale / Stock / PM</p><div class="mact"><button class="btn" id="cancel">ยกเลิก</button><button class="btn primary" id="xgo">ดาวน์โหลด Excel</button></div></div></div>';
+  showRange();
 }
+function showRange(){var el=$("#x-month"),o=$("#x-range");if(!el||!o||!el.value)return;var c=cycleOf(el.value);o.textContent="รอบ "+beDate(c.a)+" – "+beDate(c.b)}
 function involves(x,name){
   if(!name)return true;if(x.agent===name)return true;
   var re=new RegExp("(^|[^A-Za-z0-9ก-๙])"+name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"($|[^A-Za-z0-9ก-๙])","i");
   return [x.sale,x.stock,x.pm].some(function(v){return v&&re.test(String(v))});
 }
+var CUTOFF=25;
+function cycleOf(month){var y=Number(month.split("-")[0]),m=Number(month.split("-")[1])-1;return{y:y,m:m,a:iso(new Date(y,m-1,CUTOFF+1)),b:iso(new Date(y,m,CUTOFF))}}
+function cycleMonthFor(d){var x=new Date(d.getFullYear(),d.getMonth()+(d.getDate()>CUTOFF?1:0),1);return x.getFullYear()+"-"+pad(x.getMonth()+1)}
 function beDate(isoStr){if(!isoStr)return"";var p=isoStr.split("-");return Number(p[2])+"/"+Number(p[1])+"/"+(Number(p[0])+543)}
 async function exportXlsx(kind,month,agent,fullName,basis){
   basis=basis||"date";if(agent&&fullName!=null){try{localStorage.setItem("jj_full_"+agent,fullName)}catch(e){}}
   if(!window.ExcelJS){toast("โหลดตัวสร้าง Excel ไม่สำเร็จ ลองรีเฟรชหน้า");return}
   if(!db){toast("ยังไม่ได้ล็อกอิน");return}
-  var y=Number(month.split("-")[0]),m=Number(month.split("-")[1])-1,a=iso(new Date(y,m,1)),b=iso(new Date(y,m+1,0));
+  var cy=cycleOf(month),y=cy.y,m=cy.m,a=cy.a,b=cy.b;
   var q=db.collection(COLL[kind]).where(basis,">=",a).where(basis,"<=",b),list;
   try{list=q._fetch?(await q._fetch()).map(function(r){var o=Object.assign({},r.data);o.id=r.id;return o}):(kind==="bk"?bk:sc).filter(function(x){return x[basis]>=a&&x[basis]<=b})}catch(e){toast("ดึงข้อมูลไม่สำเร็จ ลองอีกครั้ง");return}
   if(agent)list=list.filter(function(x){return involves(x,agent)});
   list.sort(sortMoney);
-  if(!list.length){toast("ไม่มีรายการ "+TABNAME[kind]+" ใน "+TH_MS[m]+" "+(y+543));return}
+  if(!list.length){toast("ไม่มีรายการ "+TABNAME[kind]+" ในรอบ "+beDate(a)+" – "+beDate(b));return}
   var groups={};
   if(agent)groups[agent]=list;
   else list.forEach(function(x){(groups[x.agent||"-"]=groups[x.agent||"-"]||[]).push(x)});
@@ -827,6 +832,7 @@ async function exportXlsx(kind,month,agent,fullName,basis){
     sh.mergeCells("A1:Q1");var c=sh.getCell("A1");c.value=title;c.font=FONT;c.alignment={horizontal:"center",vertical:"middle"};sh.getRow(1).height=38.25;
     sh.getCell("A3").value="ชื่อเซลล์";sh.mergeCells("B3:E3");sh.getCell("B3").value=(agent&&fullName)?fullName:(fullNameOf(name)||name);
     sh.getCell("G3").value="ประจำเดือน";sh.mergeCells("H3:I3");var hc=sh.getCell("H3");hc.value=TH_MS[m]+" "+(y+543);
+    sh.mergeCells("J3:M3");sh.getCell("J3").value="รอบ "+beDate(a)+" – "+beDate(b);sh.getCell("J3").font=FONT;
     ["A3","B3","G3","H3"].forEach(function(k){sh.getCell(k).font=FONT});
     heads.forEach(function(h,i){var col=String.fromCharCode(65+i);sh.mergeCells(col+"5:"+col+"6");var hc=sh.getCell(col+"5");hc.value=h;hc.font=FONT;
       hc.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFFFC000"}};hc.alignment={horizontal:"center",vertical:"middle",wrapText:true};hc.border=BOX;sh.getCell(col+"6").border=BOX});
@@ -907,6 +913,7 @@ document.addEventListener("change",function(e){
   var t=e.target;
   if(t.id==="agentf"){fAgent=t.value;render();return}
   if(t.id==="x-agent"){$("#x-full").value=fullNameOf(t.value);return}
+  if(t.id==="x-month"){showRange();return}
   if(form&&t.closest("#modal")){readAny();return}
   var row=t.closest(".row");if(!row)return;var id=row.getAttribute("data-id");
   if(t.hasAttribute("data-st")){t.className="tone-"+(TONE[t.value]||"mute");save(id,{status:t.value}).then(function(ok){if(ok)toast("อัพเดตสถานะแล้ว")})}
