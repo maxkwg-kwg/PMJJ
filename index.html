@@ -37,6 +37,9 @@ body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);
 .appnav button{border:0;background:transparent;color:var(--muted);font:600 14px var(--body);padding:8px 14px;border-radius:7px;cursor:pointer;min-height:38px}
 .appnav button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
 .appnav button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+img{max-width:100%}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
 .who{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-left:auto}
 .btn-lo{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:5px 10px;font:500 13px var(--body);cursor:pointer}
 .authcard{max-width:420px;margin:28px auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px}
@@ -141,6 +144,19 @@ body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);
 .vs .mt td{padding:9px 12px;border-top:1px solid var(--line);vertical-align:top}
 .vs .mt .num{text-align:right;font-family:var(--f-mono);white-space:nowrap;font-variant-numeric:tabular-nums}
 .vs .mt tfoot td{font-weight:600;background:var(--field)}
+.vs .dyw{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.vs table.dy{border-collapse:collapse;width:100%;min-width:900px}
+.vs .dy th{font-size:12px;color:var(--muted);font-weight:500;text-align:center;padding:8px 6px;background:var(--field);white-space:nowrap;line-height:1.3}
+.vs .dy th.l,.vs .dy td.l{text-align:left}
+.vs .dy td{padding:6px;border-top:1px solid var(--line);text-align:center;vertical-align:middle}
+.vs .dy td.nm{font-weight:600;white-space:nowrap;padding-left:12px}
+.vs .dy input{width:52px;text-align:center;border:1px solid var(--line);background:var(--field);border-radius:7px;padding:6px 4px;font-family:var(--f-mono)}
+.vs .dy input.nt{width:100%;min-width:140px;text-align:left;font-family:var(--f-body)}
+.vs .dy input::placeholder{color:var(--muted);opacity:.8}
+.vs .dy select{border:1px solid var(--line);border-radius:7px;padding:6px;background:var(--field)}
+.vs .dy select.off{background:var(--wait-bg);color:var(--wait-fg);border-color:transparent;font-weight:600}
+.vs .dy tr.offrow td{background:color-mix(in srgb,var(--wait-bg) 35%,transparent)}
+.vs .dyprev{white-space:pre-wrap;font-family:var(--f-mono);font-size:13px;background:var(--field);border:1px dashed var(--line);border-radius:10px;padding:12px;margin-top:12px}
 .vs .done{background:var(--good-bg);color:var(--good-fg);border-radius:99px;padding:2px 9px;font-size:12px;font-weight:500}
 .vs .ib.go{border-color:var(--accent);color:var(--accent);font-weight:600}
 .vs .co{background:var(--viol-bg);color:var(--viol-fg);border-radius:99px;padding:1px 9px;font-size:12px}
@@ -506,7 +522,7 @@ var esc=function(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){re
 var $=function(s){return document.querySelector(s)};
 
 var db=null,dl=null,unsub=null,unsubB=null,unsubS=null,items=[],bk=[],sc=[],loaded=false,err=null,dirty=false,tab="view",formKind="appt";
-var VAT=0.07,COLL={bk:"bookings",sc:"successes"},TABNAME={view:"นัดดูห้อง",bk:"Booking",sc:"Success"};
+var VAT=0.07,COLL={bk:"bookings",sc:"successes"},TABNAME={view:"นัดดูห้อง",bk:"Booking",sc:"Success",dy:"รายงานประจำวัน"};
 var NOTCOUNT={"ยกเลิก":1,"เลื่อนนัด":1,"ลูกค้าได้ห้องแล้ว":1};
 function r2(n){return Math.round(n*100)/100}
 function netOf(a){return r2(Number(a)/(1+VAT))}
@@ -562,6 +578,7 @@ function render(){
   var real=items.filter(function(a){return !isMeeting(a)});
   $("#sub").textContent=err?"โหลดไม่สำเร็จ":!db?"ยังไม่ได้ล็อกอิน":!loaded?"กำลังโหลดนัด…":real.length+" นัดในสัปดาห์นี้";
   renderTabs();$("#viewbar").hidden=tab!=="view";
+  if(tab==="dy"){$("#filters").innerHTML="";dySubscribe();$("#days").innerHTML=dailyHtml();return}
   if(tab!=="view"){$("#filters").innerHTML="";$("#days").innerHTML=moneyHtml(tab);return}
   // filters
   var counts={};real.forEach(function(a){counts[a.status]=(counts[a.status]||0)+1});
@@ -655,7 +672,7 @@ function readForm(){
   $("#prev-msg").textContent=form.agent?(line(form)||"-"):"เลือกเซลล์เพื่อดูข้อความ";
 }
 function renderTabs(){
-  $("#tabs").innerHTML=["view","bk","sc"].map(function(k){var n=k==="bk"?bk.length:k==="sc"?sc.length:0;return '<button class="tab" role="tab" data-tab="'+k+'" aria-selected="'+(tab===k)+'">'+TABNAME[k]+(n?'<small>'+n+'</small>':'')+'</button>'}).join("");
+  $("#tabs").innerHTML=["view","bk","sc","dy"].map(function(k){var n=k==="bk"?bk.length:k==="sc"?sc.length:0;return '<button class="tab" role="tab" data-tab="'+k+'" aria-selected="'+(tab===k)+'">'+TABNAME[k]+(n?'<small>'+n+'</small>':'')+'</button>'}).join("");
 }
 function moneyHtml(kind){
   var list=(kind==="bk"?bk:sc).slice().sort(sortMoney),t=mTotals(list),L=TABNAME[kind];
@@ -865,12 +882,68 @@ async function exportXlsx(kind,month,agent,fullName,basis){
   document.body.appendChild(aEl);aEl.click();aEl.remove();setTimeout(function(){URL.revokeObjectURL(url)},4000);
   closeForm();toast("Export แล้ว");
 }
+
+/* Daily report (รายงานประจำวัน) — one doc per agent per day in collection "daily" */
+var dyDate=iso(new Date()),dyRows={},dyTomorrow=[],dyUnsub=null,dyUnsub2=null,dyKey="";
+var DY_EXTRA=["Sign","โอน","Move in"];
+function dyTomorrowOf(d){return iso(addDays(parse(d),1))}
+function dySubscribe(){
+  if(!db||dyKey===dyDate)return;dyKey=dyDate;
+  if(dyUnsub)dyUnsub();if(dyUnsub2)dyUnsub2();dyRows={};dyTomorrow=[];
+  var keep=function(){var ae=document.activeElement;if(ae&&ae.closest&&ae.closest("#days")&&(ae.tagName==="INPUT"||ae.tagName==="SELECT")){dirty=true;return}if(tab==="dy")render()};
+  dyUnsub=db.collection("daily").where("date","==",dyDate).onSnapshot(function(s){dyRows={};s.docs.forEach(function(d){var o=d.data();if(o&&o.agent)dyRows[o.agent]=o});keep()},function(){});
+  dyUnsub2=db.collection("appts").where("date","==",dyTomorrowOf(dyDate)).onSnapshot(function(s){dyTomorrow=s.docs.map(function(d){return d.data()});keep()},function(){});
+}
+function dyAutoView(n){return dyTomorrow.filter(function(a){return a.agent===n&&a.act==="View"&&!NOTCOUNT[a.status]}).length}
+function dyRoster(){var n=AGENTS.filter(function(x){return x!==TEAM});Object.keys(dyRows).forEach(function(k){if(n.indexOf(k)<0)n.push(k)});return n}
+function dyVal(r,k){return r&&r[k]!==""&&r[k]!=null?r[k]:""}
+function dyLine(n){
+  var r=dyRows[n]||{},v=dyVal(r,"view"),auto=dyAutoView(n),c=dyVal(r,"cas"),ps=dyVal(r,"pmSend"),pt=dyVal(r,"pmTom");
+  if(v===""&&auto)v=auto;
+  var out="✅✅ "+n;
+  if(v!==""||c!=="")out+=" "+(v===""?0:v)+"/"+(c===""?0:c);
+  if(ps!==""||pt!=="")out+=" PM "+(ps===""?0:ps)+"/"+(pt===""?0:pt);
+  DY_EXTRA.forEach(function(k){var x=r.acts&&r.acts[k];if(x)out+=" "+k+" "+x});
+  if(r.status&&r.status!=="ทำงาน")out+=" "+r.status;
+  if(r.note)out+=" "+r.note;
+  return out;
+}
+function dyText(){var d=parse(dyDate);return pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear()+" @All\nAllView / Case/ PM ที่ส่ง / Pm ที่จะทำพรุ่งนี้\n"+dyRoster().map(dyLine).join("\n")}
+function dailyHtml(){
+  var d=parse(dyDate),tm=parse(dyTomorrowOf(dyDate));
+  var h='<div class="mhead"><div><b>รายงานประจำวัน</b> <span class="cnt">แต่ละคนกรอกแถวของตัวเอง บันทึกอัตโนมัติเมื่อกรอกเสร็จ</span></div><div class="nav">'+
+    '<button class="btn" data-dyshift="-1" aria-label="วันก่อน">◀</button><input class="btn" type="date" id="dy-date" value="'+dyDate+'" aria-label="วันที่รายงาน"><button class="btn" data-dyshift="1" aria-label="วันถัดไป">▶</button>'+
+    '<button class="btn" id="dy-today">วันนี้</button><button class="btn" id="agents2">จัดการรายชื่อเซลล์</button><button class="btn primary" id="dy-copy">ก๊อปข้อความ</button></div></div>';
+  if(!db)h+='<div class="note">ล็อกอินด้วยบัญชีทีมก่อน จึงจะกรอกรายงานได้</div>';
+  h+='<div class="dyw"><table class="dy"><thead><tr><th class="l">เซลล์</th><th>สถานะ</th><th>View<br>พรุ่งนี้</th><th>Case ที่จะ<br>รับพรุ่งนี้</th><th>PM<br>ที่จะส่ง</th><th>PM ที่จะทำ<br>พรุ่งนี้</th>'+DY_EXTRA.map(function(k){return '<th>'+esc(k)+'</th>'}).join("")+'<th class="l">หมายเหตุ</th></tr></thead><tbody>';
+  dyRoster().forEach(function(n){
+    var r=dyRows[n]||{},st=r.status||"ทำงาน",off=st!=="ทำงาน",auto=dyAutoView(n);
+    var num=function(k,ph){return '<input type="number" inputmode="numeric" min="0" step="1" data-dy="'+k+'" data-ag="'+esc(n)+'" value="'+esc(dyVal(r,k))+'"'+(ph!=null?' placeholder="'+ph+'" title="จากตารางนัด '+dayLabel(tm)+'"':'')+' aria-label="'+esc(n)+' '+k+'">'};
+    h+='<tr class="'+(off?"offrow":"")+'"><td class="nm l">'+esc(n)+'</td><td><select data-dy="status" data-ag="'+esc(n)+'" class="'+(off?"off":"")+'" aria-label="สถานะ '+esc(n)+'">'+["ทำงาน","ลา","หยุด"].map(function(x){return '<option'+(x===st?" selected":"")+'>'+x+'</option>'}).join("")+'</select></td>'+
+      '<td>'+num("view",auto||"0")+'</td><td>'+num("cas")+'</td><td>'+num("pmSend")+'</td><td>'+num("pmTom")+'</td>'+
+      DY_EXTRA.map(function(k){return '<td><input type="number" inputmode="numeric" min="0" step="1" data-dyx="'+esc(k)+'" data-ag="'+esc(n)+'" value="'+esc(r.acts&&r.acts[k]?r.acts[k]:"")+'" aria-label="'+esc(n)+' '+esc(k)+'"></td>'}).join("")+
+      '<td class="l"><input class="nt" type="text" data-dy="note" data-ag="'+esc(n)+'" value="'+esc(r.note||"")+'" placeholder="เช่น ประเมิน 1, รับใบปลอดหนี้" aria-label="หมายเหตุ '+esc(n)+'"></td></tr>';
+  });
+  h+='</tbody></table></div><p class="help">ช่อง View พรุ่งนี้ที่เป็นตัวเลขจาง ดึงจากนัด View ในตารางวันที่ '+dayLabel(tm)+' อัตโนมัติ ถ้าพิมพ์เองจะใช้ตัวเลขที่พิมพ์</p><div class="dyprev" id="dy-prev">'+esc(dyText())+'</div>';
+  return h;
+}
+function dySave(n,patch){
+  var cur=Object.assign({date:dyDate,agent:n,status:"ทำงาน"},dyRows[n]||{},patch);dyRows[n]=cur;
+  var el=document.getElementById("dy-prev");if(el)el.textContent=dyText();
+  if(!db){toast("บันทึกไม่ได้");return}
+  db.collection("daily").doc(dyDate+"__"+n.replace(/[^A-Za-z0-9ก-๙_-]/g,"_")).set(cur).catch(function(e){toast(e&&e.code==="invalid_argument"?"บันทึกไม่ได้ บัญชีนี้ยังไม่ได้รับสิทธิ์":"บันทึกไม่ได้ ลองอีกครั้ง")});
+}
+function dyGo(d){dyDate=d;dyKey="";render()}
 /* events */
 document.addEventListener("click",function(e){
   var t=e.target;
   var rm=t.closest("[data-rmag]");if(rm){removeAgent(rm.getAttribute("data-rmag"));return}
   if(t.id==="addag"){addAgent();return}
   if(t.id==="savejpg"){saveJpg();return}
+  var dsh=t.closest("[data-dyshift]");if(dsh){dyGo(iso(addDays(parse(dyDate),Number(dsh.getAttribute("data-dyshift")))));return}
+  if(t.id==="dy-today"){dyGo(iso(new Date()));return}
+  if(t.id==="agents2"){openAgents();return}
+  if(t.id==="dy-copy"){copy(dyText());return}
   var tb=t.closest("[data-tab]");if(tb){tab=tb.getAttribute("data-tab");render();return}
   var ma=t.closest("[data-madd]");if(ma){openMoney(ma.getAttribute("data-madd"),null);return}
   var mx=t.closest("[data-mxls]");if(mx){openExport(mx.getAttribute("data-mxls"));return}
@@ -926,6 +999,13 @@ document.addEventListener("change",function(e){
   var t=e.target;
   if(t.id==="agentf"){fAgent=t.value;render();return}
   if(t.id==="x-agent"){$("#x-full").value=fullNameOf(t.value);return}
+  if(t.id==="dy-date"){if(t.value)dyGo(t.value);return}
+  if(t.hasAttribute&&t.hasAttribute("data-dy")){var k=t.getAttribute("data-dy"),n=t.getAttribute("data-ag"),v=t.value;var pt={};
+    pt[k]=(k==="note"||k==="status")?v.trim():(v===""?"":Math.max(0,Math.round(Number(v))||0));
+    if(k==="status"){t.className=v!=="ทำงาน"?"off":"";var tr=t.closest("tr");if(tr)tr.className=v!=="ทำงาน"?"offrow":""}
+    dySave(n,pt);return}
+  if(t.hasAttribute&&t.hasAttribute("data-dyx")){var n2=t.getAttribute("data-ag"),k2=t.getAttribute("data-dyx"),acts=Object.assign({},(dyRows[n2]||{}).acts||{});
+    var v2=t.value===""?0:Math.max(0,Math.round(Number(t.value))||0);if(v2)acts[k2]=v2;else delete acts[k2];dySave(n2,{acts:acts});return}
   if(t.id==="x-month"){showRange();return}
   if(form&&t.closest("#modal")){readAny();return}
   var row=t.closest(".row");if(!row)return;var id=row.getAttribute("data-id");
