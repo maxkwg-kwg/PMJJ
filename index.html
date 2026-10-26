@@ -219,11 +219,11 @@ body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);
 <section class="vs" id="pane-views">
 <div class="authcard" id="authcard" hidden>
   <h2>เข้าสู่ระบบทีมจ๊ะจ๋า</h2>
-  <p class="ahelp">ใช้อีเมลที่ Max เพิ่มไว้ในรายชื่อทีม ครั้งแรกกด "สมัครบัญชี" แล้วตั้งรหัสผ่านเอง</p>
+  <p class="ahelp">ใส่ชื่อผู้ใช้และรหัสผ่านของทีม</p>
   <form id="authform" novalidate>
-    <label for="a-email">อีเมล</label><input id="a-email" type="email" autocomplete="email" required>
-    <label for="a-pass">รหัสผ่าน (อย่างน้อย 6 ตัว)</label><input id="a-pass" type="password" autocomplete="current-password" minlength="6" required>
-    <div class="aact"><button class="abtn primary" type="submit" id="a-login">เข้าสู่ระบบ</button><button class="abtn" type="button" id="a-signup">สมัครบัญชี</button><button class="alink" type="button" id="a-forgot">ลืมรหัสผ่าน</button></div>
+    <label for="a-email">ชื่อผู้ใช้</label><input id="a-email" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+    <label for="a-pass">รหัสผ่าน</label><input id="a-pass" type="password" autocomplete="current-password" required>
+    <div class="aact"><button class="abtn primary" type="submit" id="a-login">เข้าสู่ระบบ</button></div>
     <p class="amsg" id="a-msg" role="status"></p>
   </form>
 </div>
@@ -436,6 +436,9 @@ body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);
   var db={collection:coll,doc:function(path){var p=path.split("/");return docRef(p[0],p[1])}};
 
   var started=false,recovery=false;
+  var DOMAIN=cfg.LOGIN_DOMAIN||"pmjj.team";
+  function toEmail(u){u=String(u||"").trim().toLowerCase();return u.indexOf("@")>=0?u:u+"@"+DOMAIN}
+  function toUser(e){e=String(e||"");return e.slice(-(DOMAIN.length+1))==="@"+DOMAIN?e.slice(0,-(DOMAIN.length+1)):e}
   function showApp(on){var w=document.querySelector("#pane-views > .wrap");if(w)w.hidden=!on}
   function msg(t,bad){var m=$("a-msg");if(m){m.textContent=t;m.className="amsg"+(bad?" err":"")}}
   async function onSession(session){
@@ -443,9 +446,9 @@ body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);
     if(!session){card.hidden=false;who.hidden=true;showApp(false);return}
     var email=session.user.email;
     var m=await sb.from("team_members").select("name").ilike("email",email).maybeSingle();
-    if(m.error||!m.data){card.hidden=false;who.hidden=false;$("whoName").textContent=email;
-      showApp(false);msg("บัญชี "+email+" ยังไม่ได้อยู่ในรายชื่อทีม ให้ Max เพิ่มอีเมลนี้ก่อน แล้วรีเฟรชหน้านี้",true);return}
-    card.hidden=true;showApp(true);who.hidden=false;$("whoName").textContent=m.data.name||email;
+    if(m.error||!m.data){card.hidden=false;who.hidden=false;$("whoName").textContent=toUser(email);
+      showApp(false);msg("บัญชี "+toUser(email)+" ยังไม่ได้รับสิทธิ์ ให้ Max เพิ่มในรายชื่อทีมก่อน แล้วรีเฟรชหน้านี้",true);return}
+    card.hidden=true;showApp(true);who.hidden=false;$("whoName").textContent=m.data.name||toUser(email);
     if(!started){started=true;resolveReady(db)}
   }
   document.addEventListener("DOMContentLoaded",function(){
@@ -453,21 +456,8 @@ body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);
     f.addEventListener("submit",async function(e){e.preventDefault();
       if(recovery){var u=await sb.auth.updateUser({password:$("a-pass").value});msg(u.error?u.error.message:"ตั้งรหัสใหม่แล้ว",!!u.error);if(!u.error)location.reload();return}
       msg("กำลังเข้าสู่ระบบ…");
-      var r=await sb.auth.signInWithPassword({email:$("a-email").value.trim(),password:$("a-pass").value});
-      if(r.error)msg(/Invalid login/i.test(r.error.message)?"อีเมลหรือรหัสผ่านไม่ถูกต้อง":/not confirmed/i.test(r.error.message)?"ยังไม่ได้ยืนยันอีเมล เช็กกล่องอีเมลก่อน":r.error.message,true)});
-    $("a-signup").addEventListener("click",async function(){
-      var em=$("a-email").value.trim(),pw=$("a-pass").value;
-      if(!em||pw.length<6){msg("ใส่อีเมล และรหัสผ่านอย่างน้อย 6 ตัว",true);return}
-      msg("กำลังสมัคร…");
-      var r=await sb.auth.signUp({email:em,password:pw,options:{emailRedirectTo:location.origin}});
-      if(r.error)msg(/registered/i.test(r.error.message)?"อีเมลนี้สมัครแล้ว กดเข้าสู่ระบบได้เลย":r.error.message,true);
-      else if(!r.data.session)msg("สมัครแล้ว เปิดอีเมลเพื่อยืนยัน แล้วกลับมาเข้าสู่ระบบ");
-    });
-    $("a-forgot").addEventListener("click",async function(){
-      var em=$("a-email").value.trim();if(!em){msg("ใส่อีเมลก่อน แล้วกดลืมรหัสผ่าน",true);return}
-      var r=await sb.auth.resetPasswordForEmail(em,{redirectTo:location.origin});
-      msg(r.error?r.error.message:"ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลแล้ว",!!r.error);
-    });
+      var r=await sb.auth.signInWithPassword({email:toEmail($("a-email").value),password:$("a-pass").value});
+      if(r.error)msg(/Invalid login/i.test(r.error.message)?"ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง":/not confirmed/i.test(r.error.message)?"ยังไม่ได้ยืนยันอีเมล เช็กกล่องอีเมลก่อน":r.error.message,true)});
     $("logout").addEventListener("click",async function(){await sb.auth.signOut();location.reload()});
     showApp(false);
     sb.auth.getSession().then(function(r){onSession(r.data.session)});
