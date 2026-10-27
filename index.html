@@ -37,6 +37,29 @@ body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);
 .appnav button{border:0;background:transparent;color:var(--muted);font:600 14px var(--body);padding:8px 14px;border-radius:7px;cursor:pointer;min-height:38px}
 .appnav button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
 .appnav button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.am-back{position:fixed;inset:0;background:rgba(10,16,22,.55);display:flex;align-items:flex-start;justify-content:center;padding:max(16px,env(safe-area-inset-top,0px)) 16px 16px;overflow:auto;z-index:40}
+.am{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:14px;width:100%;max-width:720px;padding:20px;margin:auto;font:14px/1.5 var(--body)}
+.am h3{font:600 18px var(--display);margin:0 0 4px}
+.am .sub2{color:var(--muted);font-size:13px;margin:0 0 14px}
+.am-tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.am table{border-collapse:collapse;width:100%;min-width:560px}
+.am th{font-size:12px;color:var(--muted);font-weight:500;text-align:left;padding:8px 10px;background:var(--field)}
+.am td{padding:8px 10px;border-top:1px solid var(--line);vertical-align:middle}
+.am td.u{font-family:var(--mono);font-size:13px}
+.am .badge{background:var(--accent-soft);color:var(--accent);border-radius:99px;padding:1px 8px;font-size:11.5px;font-weight:600;margin-left:6px}
+.am .ab{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:5px 10px;font:500 13px var(--body);cursor:pointer;margin-left:4px}
+.am .ab.danger{color:var(--bad);border-color:var(--bad)}
+.am .ab.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.am .add{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 10px;margin-top:16px;align-items:end}
+.am .add label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:3px}
+.am .add input[type=text],.am .add input[type=password],.am .rp input{width:100%;border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:8px;padding:8px 9px;font:14px var(--body)}
+.am .chk{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink)}
+.am .row3{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+.am .rp{display:flex;gap:6px;margin-top:6px}
+.am .msg2{font-size:13px;min-height:1.2em;margin:10px 0 0}
+.am .msg2.err{color:var(--bad)}
+.am .foot2{display:flex;justify-content:flex-end;margin-top:14px}
+@media (max-width:560px){.am .add{grid-template-columns:1fr}}
 [hidden]{display:none!important}
 img{max-width:100%}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -228,7 +251,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 
 <div class="shell">
   <div class="brand">Team Jahja นักล่า PM<small>ทีมจ๊ะจ๋า · ตารางวิวและเครื่องคิดเลขราคาขาย</small></div>
-  <div class="who" id="who" hidden><span id="whoName"></span><button class="btn-lo" id="logout">ออกจากระบบ</button></div>
+  <div class="who" id="who" hidden><span id="whoName"></span><button class="btn-lo" id="members" hidden>จัดการสมาชิก</button><button class="btn-lo" id="logout">ออกจากระบบ</button></div>
   <div class="appnav" role="tablist" aria-label="ส่วนของแอป">
     <button role="tab" id="nav-views" aria-controls="pane-views">ตารางวิว</button>
     <button role="tab" id="nav-calc" aria-controls="pane-calc">เครื่องคิดเลข NET</button>
@@ -454,6 +477,64 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
   };return q}
   var db={collection:coll,doc:function(path){var p=path.split("/");return docRef(p[0],p[1])}};
 
+
+  /* ---- admin: manage team members (needs supabase/admin.sql) ---- */
+  var isAdmin=false;
+  var ERR={not_admin:"บัญชีนี้ไม่ใช่แอดมิน",bad_username:"ชื่อผู้ใช้ใช้ได้เฉพาะ a-z 0-9 . _ - ไม่เว้นวรรค",short_password:"รหัสผ่านต้องมีอย่างน้อย 6 ตัว",no_user:"ไม่พบบัญชีนี้",cannot_remove_self:"ลบบัญชีที่กำลังใช้อยู่ไม่ได้"};
+  function errText(e){var m=(e&&e.message)||"";for(var k in ERR)if(m.indexOf(k)>=0)return ERR[k];if(/function .* does not exist|Could not find the function/i.test(m))return "ยังไม่ได้ติดตั้งระบบจัดการสมาชิก ให้รันไฟล์ supabase/admin.sql ใน Supabase ก่อน";return "ทำรายการไม่สำเร็จ: "+m}
+  function h(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+  function when(t){if(!t)return "ยังไม่เคยเข้า";var d=new Date(t);return d.getDate()+"/"+(d.getMonth()+1)+"/"+(d.getFullYear()+543)+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")}
+  function cap(u){return u?u.charAt(0).toUpperCase()+u.slice(1):u}
+  var amEl=null,amRows=[],me="";
+  function amMsg(t,bad){var m=document.getElementById("am-msg");if(m){m.textContent=t||"";m.className="msg2"+(bad?" err":"")}}
+  async function amLoad(){var r=await sb.rpc("admin_list_members");if(r.error){amMsg(errText(r.error),true);return}amRows=r.data||[];amRender()}
+  function amRender(){
+    var tb=document.getElementById("am-body");if(!tb)return;
+    tb.innerHTML=amRows.map(function(r){var self=r.email===me;return '<tr><td class="u">'+h(r.username)+(r.is_admin?'<span class="badge">แอดมิน</span>':'')+'</td><td>'+h(r.name)+'</td><td>'+h(when(r.last_sign_in))+'</td><td style="text-align:right;white-space:nowrap">'+
+      '<button class="ab" data-am-rp="'+h(r.username)+'">ตั้งรหัสใหม่</button>'+(self?'':'<button class="ab danger" data-am-rm="'+h(r.username)+'" data-name="'+h(r.name)+'">ลบ</button>')+
+      '<div class="rp" id="rp-'+h(r.username)+'" hidden><input type="password" placeholder="รหัสใหม่ อย่างน้อย 6 ตัว" autocomplete="new-password"><button class="ab primary" data-am-rpgo="'+h(r.username)+'">บันทึก</button></div></td></tr>'}).join("")||'<tr><td colspan="4" style="color:var(--muted)">ยังไม่มีสมาชิก</td></tr>';
+  }
+  function amOpen(){
+    if(amEl)amEl.remove();amEl=document.createElement("div");amEl.className="am-back";amEl.id="am-back";
+    amEl.innerHTML='<div class="am" role="dialog" aria-modal="true" aria-label="จัดการสมาชิก"><h3>จัดการสมาชิก</h3><p class="sub2">เพิ่มหรือลบบัญชีล็อกอินของทีม คนที่ถูกลบจะล็อกอินไม่ได้ แต่นัดที่เคยลงไว้ยังอยู่ครบ</p>'+
+      '<div class="am-tw"><table><thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>เข้าใช้ล่าสุด</th><th></th></tr></thead><tbody id="am-body"><tr><td colspan="4">กำลังโหลด…</td></tr></tbody></table></div>'+
+      '<form class="add" id="am-add" novalidate><div><label for="am-u">ชื่อผู้ใช้ (ใช้ล็อกอิน)</label><input id="am-u" type="text" autocapitalize="none" spellcheck="false" placeholder="เช่น air"></div>'+
+      '<div><label for="am-n">ชื่อที่แสดง</label><input id="am-n" type="text" placeholder="เช่น Air"></div>'+
+      '<div><label for="am-p">รหัสผ่าน</label><input id="am-p" type="text" value="555555" autocomplete="off"></div>'+
+      '<div class="row3"><label class="chk"><input type="checkbox" id="am-ag" checked> เพิ่มในรายชื่อเซลล์ด้วย</label><label class="chk"><input type="checkbox" id="am-ad"> ให้เป็นแอดมิน</label><button class="ab primary" type="submit">+ เพิ่มสมาชิก</button></div></form>'+
+      '<p class="msg2" id="am-msg" role="status"></p><div class="foot2"><button class="ab" id="am-close">ปิด</button></div></div>';
+    document.body.appendChild(amEl);amLoad();
+  }
+  async function amAdd(e){e.preventDefault();
+    var u=document.getElementById("am-u").value.trim().toLowerCase(),n=document.getElementById("am-n").value.trim()||cap(u),pw=document.getElementById("am-p").value,ad=document.getElementById("am-ad").checked,ag=document.getElementById("am-ag").checked;
+    if(!u){amMsg("ใส่ชื่อผู้ใช้ก่อน",true);return}
+    amMsg("กำลังเพิ่ม…");
+    var r=await sb.rpc("admin_add_member",{p_user:u,p_name:n,p_password:pw,p_admin:ad});
+    if(r.error){amMsg(errText(r.error),true);return}
+    if(ag&&window.JJ_getAgents){var l=window.JJ_getAgents();if(l.map(function(x){return x.toLowerCase()}).indexOf(n.toLowerCase())<0)await window.JJ_saveAgents(l.concat([n]))}
+    document.getElementById("am-u").value="";document.getElementById("am-n").value="";
+    amMsg("เพิ่ม "+n+" แล้ว ล็อกอินด้วยชื่อผู้ใช้ "+u+" รหัส "+pw);amLoad();
+  }
+  async function amRemove(u,name,btn){
+    if(btn.getAttribute("data-sure")!=="1"){btn.setAttribute("data-sure","1");btn.textContent="กดอีกครั้งเพื่อยืนยัน";return}
+    var r=await sb.rpc("admin_remove_member",{p_user:u});if(r.error){amMsg(errText(r.error),true);return}
+    if(window.JJ_getAgents&&name){var l=window.JJ_getAgents(),k=l.filter(function(x){return x.toLowerCase()!==name.toLowerCase()});if(k.length!==l.length)await window.JJ_saveAgents(k)}
+    amMsg("ลบ "+(name||u)+" แล้ว");amLoad();
+  }
+  async function amSetPw(u){var box=document.getElementById("rp-"+u),pw=box.querySelector("input").value;
+    var r=await sb.rpc("admin_set_password",{p_user:u,p_password:pw});if(r.error){amMsg(errText(r.error),true);return}
+    box.hidden=true;amMsg("ตั้งรหัสใหม่ให้ "+u+" แล้ว");}
+  document.addEventListener("click",function(e){var t=e.target;
+    if(t.id==="members"){amOpen();return}
+    if(!amEl||!amEl.contains(t))return;
+    if(t.id==="am-close"||t.id==="am-back"){amEl.remove();amEl=null;return}
+    var rp=t.closest("[data-am-rp]");if(rp){var b=document.getElementById("rp-"+rp.getAttribute("data-am-rp"));b.hidden=!b.hidden;if(!b.hidden)b.querySelector("input").focus();return}
+    var go=t.closest("[data-am-rpgo]");if(go){amSetPw(go.getAttribute("data-am-rpgo"));return}
+    var rm=t.closest("[data-am-rm]");if(rm){amRemove(rm.getAttribute("data-am-rm"),rm.getAttribute("data-name"),rm);return}
+  });
+  document.addEventListener("submit",function(e){if(e.target&&e.target.id==="am-add")amAdd(e)});
+  document.addEventListener("keydown",function(e){if(e.key==="Escape"&&amEl){amEl.remove();amEl=null}});
+  async function checkAdmin(email){me=String(email||"").toLowerCase();var r=await sb.rpc("is_admin");isAdmin=!r.error&&r.data===true;var b=document.getElementById("members");if(b)b.hidden=!isAdmin}
   var started=false,recovery=false;
   var DOMAIN=cfg.LOGIN_DOMAIN||"pmjj.team";
   function toEmail(u){u=String(u||"").trim().toLowerCase();return u.indexOf("@")>=0?u:u+"@"+DOMAIN}
@@ -467,7 +548,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
     var m=await sb.from("team_members").select("name").ilike("email",email).maybeSingle();
     if(m.error||!m.data){card.hidden=false;who.hidden=false;$("whoName").textContent=toUser(email);
       showApp(false);msg("บัญชี "+toUser(email)+" ยังไม่ได้รับสิทธิ์ ให้ Max เพิ่มในรายชื่อทีมก่อน แล้วรีเฟรชหน้านี้",true);return}
-    card.hidden=true;showApp(true);who.hidden=false;$("whoName").textContent=m.data.name||toUser(email);
+    card.hidden=true;showApp(true);who.hidden=false;checkAdmin(email);$("whoName").textContent=m.data.name||toUser(email);
     if(!started){started=true;resolveReady(db)}
   }
   document.addEventListener("DOMContentLoaded",function(){
@@ -505,6 +586,8 @@ var DEFAULT_AGENTS=["Yong","Gunthee","Day","Kanune","Pun","Book","Noodle","Tangk
 var TEAM="ทั้งทีม";
 var AGENTS=DEFAULT_AGENTS.concat([TEAM]);
 var managing=false;
+window.JJ_getAgents=function(){return AGENTS.filter(function(x){return x!==TEAM})};
+window.JJ_saveAgents=function(names){return saveAgents(names).then(function(ok){if(ok){AGENTS=names.concat([TEAM]);render()}return ok})};
 function agentList(cur){var l=AGENTS.slice();if(cur&&l.indexOf(cur)<0)l.push(cur);return l}
 function uniqAgents(rows){var n=[];rows.forEach(function(a){if(n.indexOf(a.agent)<0)n.push(a.agent)});return n}
 var ACTS=["View","Furlist","Sign","Sign+Movein","Move in","โอน","ประเมิน","รับใบปลอดหนี้","เซ็นสัญญา","ประชุม","อื่นๆ"];
