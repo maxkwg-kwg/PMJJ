@@ -755,21 +755,21 @@ function readForm(){
   $("#prev-msg").textContent=form.agent?(line(form)||"-"):"เลือกเซลล์เพื่อดูข้อความ";
 }
 function renderTabs(){
-  $("#tabs").innerHTML=["view","bk","sc","dy"].map(function(k){var n=k==="bk"?bk.length:k==="sc"?sc.length:0;return '<button class="tab" role="tab" data-tab="'+k+'" aria-selected="'+(tab===k)+'">'+TABNAME[k]+(n?'<small>'+n+'</small>':'')+'</button>'}).join("");
+  $("#tabs").innerHTML=["view","bk","sc","dy"].map(function(k){var n=(k==="bk"||k==="sc")?(cycKey[k]?cyc[k].length:0):0;return '<button class="tab" role="tab" data-tab="'+k+'" aria-selected="'+(tab===k)+'">'+TABNAME[k]+(n?'<small>'+n+'</small>':'')+'</button>'}).join("");
 }
-var scMode="week",scCycle="",scCyc=[],scCycUnsub=null,scCycKey="";
-function scCycSub(){
-  if(!db||!scCycle||scCycKey===scCycle)return;scCycKey=scCycle;if(scCycUnsub)scCycUnsub();scCyc=[];
-  var c=cycleOf(scCycle);
-  scCycUnsub=db.collection(COLL.sc).where("date",">=",c.a).where("date","<=",c.b).onSnapshot(function(s){scCyc=s.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o});
-    var ae=document.activeElement;if(ae&&ae.closest&&ae.closest("#days")&&(ae.tagName==="INPUT"||ae.tagName==="SELECT")){dirty=true;return}if(tab==="sc")render()},function(){});
+var mCycle="",cyc={bk:[],sc:[]},cycUnsub={},cycKey={};
+function cycSub(kind){
+  if(!db)return;if(!mCycle)mCycle=cycleMonthFor(new Date());
+  if(cycKey[kind]===mCycle)return;cycKey[kind]=mCycle;if(cycUnsub[kind])cycUnsub[kind]();cyc[kind]=[];
+  var c=cycleOf(mCycle);
+  cycUnsub[kind]=db.collection(COLL[kind]).where("date",">=",c.a).where("date","<=",c.b).onSnapshot(function(s){cyc[kind]=s.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o});
+    var ae=document.activeElement;if(ae&&ae.closest&&ae.closest("#days")&&(ae.tagName==="INPUT"||ae.tagName==="SELECT")){dirty=true;return}if(tab===kind||tab==="view")render()},function(){});
 }
+function cycLabel(m){var c=cycleOf(m);return "รอบ "+TH_MS[c.m]+" "+(c.y+543)+" ("+beDate(c.a)+" – "+beDate(c.b)+")"}
 function moneyHtml(kind){
-  var cyc=kind==="sc"&&scMode==="cycle";
-  if(cyc){if(!scCycle)scCycle=cycleMonthFor(new Date());scCycSub()}
-  var list=(cyc?scCyc:(kind==="bk"?bk:sc)).slice().sort(sortMoney),t=mTotals(list),L=TABNAME[kind];
-  var cc=cyc?cycleOf(scCycle):null,rangeTxt=cyc?("รอบ "+TH_MS[cc.m]+" "+(cc.y+543)+" ("+beDate(cc.a)+" – "+beDate(cc.b)+")"):rangeLabel(ws);
-  var h=(kind==="sc"?'<div class="mhead" style="margin-bottom:10px"><div class="nav"><button class="btn'+(cyc?'':' primary')+'" data-scmode="week">ดูรายสัปดาห์</button><button class="btn'+(cyc?' primary':'')+'" data-scmode="cycle">ดูรอบค่าคอม</button>'+(cyc?'<button class="btn" data-sccyc="-1" aria-label="รอบก่อน">◀</button><input class="btn" type="month" id="sc-cycle" value="'+scCycle+'" aria-label="รอบค่าคอมเดือน"><button class="btn" data-sccyc="1" aria-label="รอบถัดไป">▶</button>':'')+'</div></div>':'')+'<div class="sum"><h2>รวม '+L+' '+(cyc?rangeTxt:'สัปดาห์นี้')+'<span>'+t.n+' รายการ</span></h2><div class="vcs"><span class="vc"><b>ยอดที่เข้า</b><span class="n">'+fm(t.gross)+'</span></span><span class="vc"><b>หลังหัก VAT 7%</b><span class="n">'+fm(t.net)+'</span></span><span class="vc"><b>VAT 7%</b><span class="n">'+fm(t.vat)+'</span></span><span class="vc"><b>Co-agent</b><span class="n">'+t.co+'</span></span></div></div>'+'<div class="mhead"><div><b>'+L+'</b> <span class="cnt">'+rangeTxt+' · Net = (Commission − ส่วนลด − Promotion) ÷ 1.07 × (100% − % Co-agent)</span></div><div class="nav"><button class="btn" data-mxls="'+kind+'">'+(kind==="sc"?"ดึง Report ค่าคอม (Excel)":"Export Excel รายเดือน")+'</button><button class="btn primary" data-madd="'+kind+'">+ เพิ่ม '+L+'</button></div></div>';
+  cycSub(kind);
+  var list=cyc[kind].slice().sort(sortMoney),t=mTotals(list),L=TABNAME[kind],rangeTxt=cycLabel(mCycle);
+  var h='<div class="mhead" style="margin-bottom:10px"><div class="nav"><button class="btn" data-sccyc="-1" aria-label="เดือนก่อน">◀</button><input class="btn" type="month" id="sc-cycle" value="'+mCycle+'" aria-label="เลือกเดือน"><button class="btn" data-sccyc="1" aria-label="เดือนถัดไป">▶</button><button class="btn" id="sc-now">เดือนนี้</button></div><span class="cnt">นับรอบวันที่ 26 – 25</span></div>'+'<div class="sum"><h2>รวม '+L+' '+rangeTxt+'<span>'+t.n+' รายการ</span></h2><div class="vcs"><span class="vc"><b>ยอดที่เข้า</b><span class="n">'+fm(t.gross)+'</span></span><span class="vc"><b>หลังหัก VAT 7%</b><span class="n">'+fm(t.net)+'</span></span><span class="vc"><b>VAT 7%</b><span class="n">'+fm(t.vat)+'</span></span><span class="vc"><b>Co-agent</b><span class="n">'+t.co+'</span></span></div></div>'+'<div class="mhead"><div><b>'+L+'</b> <span class="cnt">'+rangeTxt+' · Net = (Commission − ส่วนลด − Promotion) ÷ 1.07 × (100% − % Co-agent)</span></div><div class="nav"><button class="btn" data-mxls="'+kind+'">'+(kind==="sc"?"ดึง Report ค่าคอม (Excel)":"Export Excel รายเดือน")+'</button><button class="btn primary" data-madd="'+kind+'">+ เพิ่ม '+L+'</button></div></div>';
   if(!db)h+='<div class="note">ล็อกอินด้วยบัญชีทีมก่อน จึงจะเห็นและแก้ไขได้</div>';
   h+='<div class="tw"><table class="mt"><thead><tr><th>วัน</th><th>เซลล์</th><th>ลูกค้า / โครงการ</th><th class="num">Commission เต็ม (บาท)</th><th>Co-agent</th><th class="num">Net หลังหัก VAT</th><th class="num">VAT 7%</th><th></th></tr></thead><tbody>';
   if(!list.length)h+='<tr><td colspan="8" class="cnt">ยังไม่มีรายการ'+(db?' กด "+ เพิ่ม '+L+'" เพื่อลงยอด':'')+'</td></tr>';
@@ -850,25 +850,40 @@ async function removeAgent(v){
 /* export */
 function weekRows(){return items.slice().sort(sortItems)}
 var lastJpg=null;
-async function exportJpeg(){
+function openJpeg(){
+  managing=true;var mv=mCycle||cycleMonthFor(new Date());
+  $("#modal").innerHTML='<div class="back" id="back"><div class="modal" role="dialog" aria-modal="true" aria-label="Export รูป JPEG"><h3>Export รูปสรุป JPEG</h3><div class="grid">'+
+   '<div class="fld full"><label>สรุปแบบ</label><div class="seg"><button type="button" data-jm="week" aria-pressed="true">รายสัปดาห์</button><button type="button" data-jm="month" aria-pressed="false">รายเดือน</button></div></div>'+
+   '<div class="fld full" id="j-weekbox"><label>สัปดาห์</label><div class="prev">'+esc(rangeLabel(ws))+' (สัปดาห์ที่เปิดดูอยู่ เปลี่ยนได้ด้วยปุ่ม ◀ ▶ ด้านบน)</div></div>'+
+   '<div class="fld full" id="j-monthbox" hidden><label for="j-month">รอบเดือน (26 – 25)</label><input id="j-month" type="month" value="'+mv+'"><small class="cnt" id="j-range">'+esc(cycLabel(mv))+'</small></div>'+
+   '</div><div class="mact"><button class="btn" id="cancel">ยกเลิก</button><button class="btn primary" id="jgo">สร้างรูป</button></div></div></div>';
+}
+async function exportJpeg(mode,month){
+  var A=items,B=bk,C=sc,label=rangeLabel(ws),we0=addDays(ws,6),dateTxt0=pad(ws.getDate())+"-"+pad(we0.getDate())+"/"+pad(we0.getMonth()+1)+"/"+String(we0.getFullYear()).slice(2);
+  if(mode==="month"){
+    if(!db){toast("ยังไม่ได้ล็อกอิน");return}
+    var cc=cycleOf(month),get=function(k){var q=db.collection(k).where("date",">=",cc.a).where("date","<=",cc.b);return q._fetch?q._fetch().then(function(r){return r.map(function(x){var o=Object.assign({},x.data);o.id=x.id;return o})}):Promise.resolve([])};
+    try{var rs=await Promise.all([get("appts"),get(COLL.bk),get(COLL.sc)]);A=rs[0];B=rs[1];C=rs[2]}catch(e){toast("ดึงข้อมูลไม่สำเร็จ ลองอีกครั้ง");return}
+    label=cycLabel(month);var pa=parse(cc.a),pb=parse(cc.b);dateTxt0=pad(pa.getDate())+"/"+pad(pa.getMonth()+1)+"-"+pad(pb.getDate())+"/"+pad(pb.getMonth()+1)+"/"+String(pb.getFullYear()).slice(2);
+  }
   try{await document.fonts.load('600 17px "IBM Plex Sans Thai"');await document.fonts.load('500 17px "IBM Plex Sans Thai"')}catch(e){}
   var S=2,P=20,FB='"IBM Plex Sans Thai",Loma,Tahoma,sans-serif';
   var cols=[["Date",118,"c"],["Name",120,"l"],["View",64,"c"],["Book",64,"c"],["ยอด Booking",138,"r"],["หลังหัก VAT 7%",138,"r"],["Success",76,"c"],["ยอด Success",138,"r"],["หลังหัก VAT 7%",138,"r"]];
   var TW=cols.reduce(function(n,c){return n+c[1]},0),W=TW+2*P,RH=40,HH=46,TT=56;
   var names=AGENTS.filter(function(x){return x!==TEAM});
-  items.concat(bk,sc).forEach(function(a){if(a.agent&&a.agent!==TEAM&&names.indexOf(a.agent)<0)names.push(a.agent)});
-  var vs=viewStats(items),vmap={};vs.list.forEach(function(r){vmap[r.agent]=r.view});
+  A.concat(B,C).forEach(function(a){if(a.agent&&a.agent!==TEAM&&names.indexOf(a.agent)<0)names.push(a.agent)});
+  var vs=viewStats(A),vmap={};vs.list.forEach(function(r){vmap[r.agent]=r.view});
   var rows=names.map(function(n){
-    var b=bk.filter(function(a){return a.agent===n}),c=sc.filter(function(a){return a.agent===n});
+    var b=B.filter(function(a){return a.agent===n}),c=C.filter(function(a){return a.agent===n});
     var tb=mTotals(b),tc=mTotals(c);return{n:n,v:vmap[n]||0,b:b.length,c:c.length,bg:tb.gross,bn:tb.net,cg:tc.gross,cn:tc.net};
   });
   var tot=rows.reduce(function(t,r){t.v+=r.v;t.b+=r.b;t.c+=r.c;t.bg+=r.bg;t.bn+=r.bn;t.cg+=r.cg;t.cn+=r.cn;return t},{v:0,b:0,c:0,bg:0,bn:0,cg:0,cn:0});
-  var we=addDays(ws,6),dateTxt=pad(ws.getDate())+"-"+pad(we.getDate())+"/"+pad(we.getMonth()+1)+"/"+String(we.getFullYear()).slice(2);
+  var dateTxt=dateTxt0;
   var H=P+TT+HH+RH*(rows.length+1)+P;
   var cv=document.createElement("canvas");cv.width=W*S;cv.height=H*S;
   var c=cv.getContext("2d");c.scale(S,S);c.fillStyle="#ffffff";c.fillRect(0,0,W,H);
   var x0=P,y=P;
-  c.fillStyle="#dcdcee";c.fillRect(x0,y,TW,TT);c.fillStyle="#16202b";c.font="600 26px "+FB;c.textAlign="center";c.fillText("Team Activity",x0+TW/2,y+37);y+=TT;
+  c.fillStyle="#dcdcee";c.fillRect(x0,y,TW,TT);c.fillStyle="#16202b";c.font="600 26px "+FB;c.textAlign="center";c.fillText("Team Activity · "+(mode==="month"?"รายเดือน ":"รายสัปดาห์ ")+label.replace(/ \(.*\)$/,""),x0+TW/2,y+37);y+=TT;
   var hdrRow=false;
   function cell(i,x,w,txt,font,fill,color){
     if(fill){c.fillStyle=fill;c.fillRect(x,y,w,hdrRow?HH:RH)}
@@ -895,7 +910,7 @@ async function exportJpeg(){
     if(!blob){toast("สร้างรูปไม่สำเร็จ");return}
     lastJpg=blob;var url=URL.createObjectURL(blob);
     managing=true;
-    $("#modal").innerHTML='<div class="back" id="back"><div class="modal" style="max-width:760px" role="dialog" aria-modal="true" aria-label="รูปสรุป"><h3>รูปสรุป '+esc(rangeLabel(ws))+'</h3><img src="'+url+'" alt="สรุปตาราง View สัปดาห์นี้" style="width:100%;border:1px solid var(--line);border-radius:8px"><p class="help">คลิกขวาที่รูปแล้วเลือกบันทึกรูปภาพ หรือกดปุ่มบันทึกไฟล์</p><div class="mact">'+'<a class="btn primary" style="text-decoration:none" download="view-schedule_'+iso(ws)+'.jpg" href="'+url+'">บันทึกเป็นไฟล์ JPEG</a>'+'<button class="btn" id="cancel">ปิด</button></div></div></div>';
+    $("#modal").innerHTML='<div class="back" id="back"><div class="modal" style="max-width:760px" role="dialog" aria-modal="true" aria-label="รูปสรุป"><h3>รูปสรุป '+esc(label)+'</h3><img src="'+url+'" alt="สรุปตาราง View สัปดาห์นี้" style="width:100%;border:1px solid var(--line);border-radius:8px"><p class="help">คลิกขวาที่รูปแล้วเลือกบันทึกรูปภาพ หรือกดปุ่มบันทึกไฟล์</p><div class="mact">'+'<a class="btn primary" style="text-decoration:none" download="view-schedule_'+iso(ws)+'.jpg" href="'+url+'">บันทึกเป็นไฟล์ JPEG</a>'+'<button class="btn" id="cancel">ปิด</button></div></div></div>';
   },"image/jpeg",0.93);
 }
 async function saveJpg(){
@@ -910,7 +925,7 @@ var TH_MS=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.
 function meName(){var w=document.getElementById("whoName");var v=w?w.textContent.trim():"";var hit=AGENTS.filter(function(x){return x.toLowerCase()===v.toLowerCase()})[0];return hit||""}
 function fullNameOf(n){try{return localStorage.getItem("jj_full_"+n)||""}catch(e){return""}}
 function openExport(kind){
-  managing=true;var now=new Date(),inWeek=iso(now)>=iso(ws)&&iso(now)<=iso(addDays(ws,6)),mv=cycleMonthFor(inWeek?now:addDays(ws,3));
+  managing=true;var mv=mCycle||cycleMonthFor(new Date());
   var names=AGENTS.filter(function(x){return x!==TEAM}),me=meName();
   $("#modal").innerHTML='<div class="back" id="back"><div class="modal" role="dialog" aria-modal="true" aria-label="Export Excel"><h3>ดึงรายงาน '+esc(TABNAME[kind])+' เป็น Excel</h3><div class="grid">'+
    '<input type="hidden" id="x-kind" value="'+kind+'">'+
@@ -1053,13 +1068,15 @@ document.addEventListener("click",function(e){
   var ma=t.closest("[data-madd]");if(ma){openMoney(ma.getAttribute("data-madd"),null);return}
   var mx=t.closest("[data-mxls]");if(mx){openExport(mx.getAttribute("data-mxls"));return}
   if(t.id==="xgo"){exportXlsx($("#x-kind").value,$("#x-month").value,$("#x-agent").value,$("#x-full").value.trim(),$("#x-basis").value);return}
-  var smo=t.closest("[data-scmode]");if(smo){scMode=smo.getAttribute("data-scmode");render();return}
-  var scs=t.closest("[data-sccyc]");if(scs){var pp=scCycle.split("-"),nd=new Date(Number(pp[0]),Number(pp[1])-1+Number(scs.getAttribute("data-sccyc")),1);scCycle=nd.getFullYear()+"-"+pad(nd.getMonth()+1);render();return}
-  var ts=t.closest("[data-tosc]");if(ts){var b0=bk.find(function(x){return x.id===ts.getAttribute("data-tosc")});if(b0){
+  var jm=t.closest("[data-jm]");if(jm){document.querySelectorAll("[data-jm]").forEach(function(x){x.setAttribute("aria-pressed",String(x===jm))});var mo=jm.getAttribute("data-jm")==="month";$("#j-monthbox").hidden=!mo;$("#j-weekbox").hidden=mo;return}
+  if(t.id==="jgo"){var mo2=document.querySelector('[data-jm="month"]').getAttribute("aria-pressed")==="true";exportJpeg(mo2?"month":"week",$("#j-month").value);return}
+  var scs=t.closest("[data-sccyc]");if(scs){var pp=mCycle.split("-"),nd=new Date(Number(pp[0]),Number(pp[1])-1+Number(scs.getAttribute("data-sccyc")),1);mCycle=nd.getFullYear()+"-"+pad(nd.getMonth()+1);render();return}
+  if(t.id==="sc-now"){mCycle=cycleMonthFor(new Date());render();return}
+  var ts=t.closest("[data-tosc]");if(ts){var b0=cyc.bk.concat(bk).find(function(x){return x.id===ts.getAttribute("data-tosc")});if(b0){
     var pre=Object.assign({},b0);["id","created","converted","scDate"].forEach(function(k){delete pre[k]});pre.fromBk=b0.id;pre.cdate=b0.date;pre.basis="booking";
     var td=iso(new Date()),inW=td>=iso(ws)&&td<=iso(addDays(ws,6));pre.date=inW?td:(b0.date||iso(ws));
     openMoney("sc",null,pre.date,pre)}return}
-  var me=t.closest("[data-medit]");if(me){var it=(tab==="bk"?bk:sc.concat(scCyc)).find(function(x){return x.id===me.getAttribute("data-medit")});if(it)openMoney(tab,it);return}
+  var me=t.closest("[data-medit]");if(me){var it=(tab==="bk"?cyc.bk.concat(bk):cyc.sc.concat(sc)).find(function(x){return x.id===me.getAttribute("data-medit")});if(it)openMoney(tab,it);return}
   var dt=t.closest("[data-dt]");if(dt&&form&&formKind!=="appt"){form.dtype=dt.getAttribute("data-dt");document.querySelectorAll("[data-dt]").forEach(function(x){x.setAttribute("aria-pressed",String(x===dt))});readMoney();return}
   var co=t.closest("[data-co]");if(co&&form&&formKind!=="appt"){form.co=co.getAttribute("data-co")==="1";document.querySelectorAll("[data-co]").forEach(function(x){x.setAttribute("aria-pressed",String(x===co))});return}
   if(t.id==="msave"){
@@ -1109,7 +1126,8 @@ document.addEventListener("change",function(e){
   if(t.id==="agentf"){fAgent=t.value;render();return}
   if(t.id==="x-agent"){$("#x-full").value=fullNameOf(t.value);return}
   if(t.id==="dy-date"){if(t.value)dyGo(t.value);return}
-  if(t.id==="sc-cycle"){if(t.value){scCycle=t.value;render()}return}
+  if(t.id==="j-month"){if(t.value)$("#j-range").textContent=cycLabel(t.value);return}
+  if(t.id==="sc-cycle"){if(t.value){mCycle=t.value;render()}return}
   if(t.hasAttribute&&t.hasAttribute("data-dy")){var k=t.getAttribute("data-dy"),n=t.getAttribute("data-ag"),v=t.value;var pt={};
     pt[k]=(k==="note"||k==="status")?v.trim():(v===""?"":Math.max(0,Math.round(Number(v))||0));
     if(k==="status"){t.className=v!=="ทำงาน"?"off":"";var tr=t.closest("tr");if(tr)tr.className=v!=="ทำงาน"?"offrow":""}
@@ -1135,9 +1153,9 @@ $("#copyweek").onclick=function(){
   for(var i=0;i<7;i++)out=out.concat(dayLines(iso(addDays(ws,i))));
   copy(out.join("\n"));
 };
-$("#export").onclick=exportJpeg;
+$("#export").onclick=openJpeg;
 render();
-window.JJ_READY.then(function(d){db=d;subscribe();
+window.JJ_READY.then(function(d){db=d;subscribe();cycSub("bk");cycSub("sc");
   db.doc("config/agents").onSnapshot(function(s){var l=s.exists&&s.data()&&s.data().list;AGENTS=(Array.isArray(l)?l:DEFAULT_AGENTS).filter(function(x){return x&&x!==TEAM}).concat([TEAM]);if(!form&&!managing)render();else if(managing)openAgents()},function(){});
 });
 })();
