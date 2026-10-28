@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Team Jahja นักล่า PM</title>
+<title>Team Activity</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
@@ -250,7 +250,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 <body>
 
 <div class="shell">
-  <div class="brand">Team Jahja นักล่า PM<small>ทีมจ๊ะจ๋า · ตารางวิวและเครื่องคิดเลขราคาขาย</small></div>
+  <div class="brand">Team Activity<small>ทีมจ๊ะจ๋า · ตารางวิวและเครื่องคิดเลขราคาขาย</small></div>
   <div class="who" id="who" hidden><span id="whoName"></span><button class="btn-lo" id="members" hidden>จัดการสมาชิก</button><button class="btn-lo" id="logout">ออกจากระบบ</button></div>
   <div class="appnav" role="tablist" aria-label="ส่วนของแอป">
     <button role="tab" id="nav-views" aria-controls="pane-views">ตารางวิว</button>
@@ -271,7 +271,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 <div class="wrap">
   <div class="bar">
     <div>
-      <h1>ตารางวิวทีมจ๊ะจ๋า</h1>
+      <h1>ตารางวิว</h1>
       <div class="sub" id="sub">กำลังโหลดนัด…</div>
     </div>
     <div class="nav">
@@ -605,7 +605,7 @@ var esc=function(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){re
 var $=function(s){return document.querySelector(s)};
 
 var db=null,dl=null,unsub=null,unsubB=null,unsubS=null,items=[],bk=[],sc=[],loaded=false,err=null,dirty=false,tab="view",formKind="appt";
-var VAT=0.07,COLL={bk:"bookings",sc:"successes"},TABNAME={view:"นัดดูห้อง",bk:"Booking",sc:"Success",dy:"รายงานประจำวัน"};
+var VAT=0.07,COLL={bk:"bookings",sc:"successes"},TABNAME={view:"นัดดูห้อง",bk:"Booking",sc:"Success",dy:"รับเคส"};
 var NOTCOUNT={"ยกเลิก":1,"เลื่อนนัด":1,"ลูกค้าได้ห้องแล้ว":1};
 function r2(n){return Math.round(n*100)/100}
 function netOf(a){return r2(Number(a)/(1+VAT))}
@@ -846,7 +846,7 @@ async function exportJpeg(){
   var cv=document.createElement("canvas");cv.width=W*S;cv.height=H*S;
   var c=cv.getContext("2d");c.scale(S,S);c.fillStyle="#ffffff";c.fillRect(0,0,W,H);
   var x0=P,y=P;
-  c.fillStyle="#dcdcee";c.fillRect(x0,y,TW,TT);c.fillStyle="#16202b";c.font="600 26px "+FB;c.textAlign="center";c.fillText("Team Jahja",x0+TW/2,y+37);y+=TT;
+  c.fillStyle="#dcdcee";c.fillRect(x0,y,TW,TT);c.fillStyle="#16202b";c.font="600 26px "+FB;c.textAlign="center";c.fillText("Team Activity",x0+TW/2,y+37);y+=TT;
   var hdrRow=false;
   function cell(i,x,w,txt,font,fill,color){
     if(fill){c.fillStyle=fill;c.fillRect(x,y,w,hdrRow?HH:RH)}
@@ -966,8 +966,8 @@ async function exportXlsx(kind,month,agent,fullName,basis){
   closeForm();toast("Export แล้ว");
 }
 
-/* Daily report (รายงานประจำวัน) — one doc per agent per day in collection "daily" */
-var dyDate=iso(new Date()),dyRows={},dyTomorrow=[],dyUnsub=null,dyUnsub2=null,dyKey="";
+/* Case intake (รับเคส) — one doc per agent per day in collection "daily" */
+var dyDate=iso(addDays(new Date(),1)),dyRows={},dyTomorrow=[],dyUnsub=null,dyUnsub2=null,dyKey="";
 var DY_EXTRA=["Sign","โอน","Move in"];
 function dyTomorrowOf(d){return iso(addDays(parse(d),1))}
 function dySubscribe(){
@@ -975,7 +975,7 @@ function dySubscribe(){
   if(dyUnsub)dyUnsub();if(dyUnsub2)dyUnsub2();dyRows={};dyTomorrow=[];
   var keep=function(){var ae=document.activeElement;if(ae&&ae.closest&&ae.closest("#days")&&(ae.tagName==="INPUT"||ae.tagName==="SELECT")){dirty=true;return}if(tab==="dy")render()};
   dyUnsub=db.collection("daily").where("date","==",dyDate).onSnapshot(function(s){dyRows={};s.docs.forEach(function(d){var o=d.data();if(o&&o.agent)dyRows[o.agent]=o});keep()},function(){});
-  dyUnsub2=db.collection("appts").where("date","==",dyTomorrowOf(dyDate)).onSnapshot(function(s){dyTomorrow=s.docs.map(function(d){return d.data()});keep()},function(){});
+  dyUnsub2=db.collection("appts").where("date","==",dyDate).onSnapshot(function(s){dyTomorrow=s.docs.map(function(d){return d.data()});keep()},function(){});
 }
 function dyAutoView(n){return dyTomorrow.filter(function(a){return a.agent===n&&a.act==="View"&&!NOTCOUNT[a.status]}).length}
 function dyRoster(){var n=AGENTS.filter(function(x){return x!==TEAM});Object.keys(dyRows).forEach(function(k){if(n.indexOf(k)<0)n.push(k)});return n}
@@ -993,12 +993,12 @@ function dyLine(n){
 }
 function dyText(){var d=parse(dyDate);return pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear()+" @All\nAllView / Case/ PM ที่ส่ง / Pm ที่จะทำพรุ่งนี้\n"+dyRoster().map(dyLine).join("\n")}
 function dailyHtml(){
-  var d=parse(dyDate),tm=parse(dyTomorrowOf(dyDate));
-  var h='<div class="mhead"><div><b>รายงานประจำวัน</b> <span class="cnt">แต่ละคนกรอกแถวของตัวเอง บันทึกอัตโนมัติเมื่อกรอกเสร็จ</span></div><div class="nav">'+
+  var d=parse(dyDate),tm=d;
+  var h='<div class="mhead"><div><b>รับเคส '+dayLabel(d)+'</b> <span class="cnt">เคสที่จะรับในวันนี้ แต่ละคนกรอกแถวของตัวเอง บันทึกอัตโนมัติ</span></div><div class="nav">'+
     '<button class="btn" data-dyshift="-1" aria-label="วันก่อน">◀</button><input class="btn" type="date" id="dy-date" value="'+dyDate+'" aria-label="วันที่รายงาน"><button class="btn" data-dyshift="1" aria-label="วันถัดไป">▶</button>'+
-    '<button class="btn" id="dy-today">วันนี้</button><button class="btn" id="agents2">จัดการรายชื่อเซลล์</button><button class="btn primary" id="dy-copy">ก๊อปข้อความ</button></div></div>';
+    '<button class="btn" id="dy-today">พรุ่งนี้</button><button class="btn" id="agents2">จัดการรายชื่อเซลล์</button><button class="btn primary" id="dy-copy">ก๊อปข้อความ</button></div></div>';
   if(!db)h+='<div class="note">ล็อกอินด้วยบัญชีทีมก่อน จึงจะกรอกรายงานได้</div>';
-  h+='<div class="dyw"><table class="dy"><thead><tr><th class="l">เซลล์</th><th>สถานะ</th><th>View<br>พรุ่งนี้</th><th>Case ที่จะ<br>รับพรุ่งนี้</th><th>PM<br>ที่จะส่ง</th><th>PM ที่จะทำ<br>พรุ่งนี้</th>'+DY_EXTRA.map(function(k){return '<th>'+esc(k)+'</th>'}).join("")+'<th class="l">หมายเหตุ</th></tr></thead><tbody>';
+  h+='<div class="dyw"><table class="dy"><thead><tr><th class="l">เซลล์</th><th>สถานะ</th><th>View</th><th>Case<br>ที่จะรับ</th><th>PM<br>ที่จะส่ง</th><th>PM<br>ที่จะทำ</th>'+DY_EXTRA.map(function(k){return '<th>'+esc(k)+'</th>'}).join("")+'<th class="l">หมายเหตุ</th></tr></thead><tbody>';
   dyRoster().forEach(function(n){
     var r=dyRows[n]||{},st=r.status||"ทำงาน",off=st!=="ทำงาน",auto=dyAutoView(n);
     var num=function(k,ph){return '<input type="number" inputmode="numeric" min="0" step="1" data-dy="'+k+'" data-ag="'+esc(n)+'" value="'+esc(dyVal(r,k))+'"'+(ph!=null?' placeholder="'+ph+'" title="จากตารางนัด '+dayLabel(tm)+'"':'')+' aria-label="'+esc(n)+' '+k+'">'};
@@ -1007,7 +1007,7 @@ function dailyHtml(){
       DY_EXTRA.map(function(k){return '<td><input type="number" inputmode="numeric" min="0" step="1" data-dyx="'+esc(k)+'" data-ag="'+esc(n)+'" value="'+esc(r.acts&&r.acts[k]?r.acts[k]:"")+'" aria-label="'+esc(n)+' '+esc(k)+'"></td>'}).join("")+
       '<td class="l"><input class="nt" type="text" data-dy="note" data-ag="'+esc(n)+'" value="'+esc(r.note||"")+'" placeholder="เช่น ประเมิน 1, รับใบปลอดหนี้" aria-label="หมายเหตุ '+esc(n)+'"></td></tr>';
   });
-  h+='</tbody></table></div><p class="help">ช่อง View พรุ่งนี้ที่เป็นตัวเลขจาง ดึงจากนัด View ในตารางวันที่ '+dayLabel(tm)+' อัตโนมัติ ถ้าพิมพ์เองจะใช้ตัวเลขที่พิมพ์</p><div class="dyprev" id="dy-prev">'+esc(dyText())+'</div>';
+  h+='</tbody></table></div><p class="help">ช่อง View ที่เป็นตัวเลขจาง ดึงจากนัด View ในตารางวิววันที่ '+dayLabel(tm)+' อัตโนมัติ ถ้าพิมพ์เองจะใช้ตัวเลขที่พิมพ์</p><div class="dyprev" id="dy-prev">'+esc(dyText())+'</div>';
   return h;
 }
 function dySave(n,patch){
@@ -1024,7 +1024,7 @@ document.addEventListener("click",function(e){
   if(t.id==="addag"){addAgent();return}
   if(t.id==="savejpg"){saveJpg();return}
   var dsh=t.closest("[data-dyshift]");if(dsh){dyGo(iso(addDays(parse(dyDate),Number(dsh.getAttribute("data-dyshift")))));return}
-  if(t.id==="dy-today"){dyGo(iso(new Date()));return}
+  if(t.id==="dy-today"){dyGo(iso(addDays(new Date(),1)));return}
   if(t.id==="agents2"){openAgents();return}
   if(t.id==="dy-copy"){copy(dyText());return}
   var tb=t.closest("[data-tab]");if(tb){tab=tb.getAttribute("data-tab");render();return}
@@ -1104,7 +1104,7 @@ $("#thisweek").onclick=function(){go(new Date())};
 $("#jump").onchange=function(e){if(e.target.value)go(parse(e.target.value))};
 $("#addtop").onclick=function(){var t=iso(new Date());var k=(t>=iso(ws)&&t<=iso(addDays(ws,6)))?t:iso(ws);openForm(null,k)};
 $("#copyweek").onclick=function(){
-  var out=["ตารางวิวทีมจ๊ะจ๋า "+rangeLabel(ws).replace(/ \d{4}$/,"")];
+  var out=["ตารางวิว "+rangeLabel(ws).replace(/ \d{4}$/,"")];
   for(var i=0;i<7;i++)out=out.concat(dayLines(iso(addDays(ws,i))));
   copy(out.join("\n"));
 };
