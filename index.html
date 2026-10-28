@@ -730,7 +730,7 @@ var form=null;
 function openForm(a,dateKey){
   var isNew=!a;formKind="appt";
   form=a?Object.assign({},a):{date:dateKey||iso(ws),time:"",agent:"",rs:"R",act:"View",cust:"",proj:"",budget:"",status:"นัดแล้ว",progress:"",follow:""};
-  var dopts="";for(var i=0;i<7;i++){var d=addDays(ws,i);dopts+='<option value="'+iso(d)+'"'+(iso(d)===form.date?" selected":"")+'>'+dayLabel(d)+'</option>'}
+  if(kind==="sc"){form.cdate=form.cdate||form.date;form.basis=form.basis||"booking"}
   var h='<div class="back" id="back"><div class="modal" role="dialog" aria-modal="true" aria-label="นัดดูห้อง"><h3>'+(isNew?"เพิ่มนัด":"แก้ไขนัด")+'</h3><div class="grid">'+
    '<div class="fld"><label for="f-date">วัน</label><select id="f-date">'+dopts+'</select></div>'+
    '<div class="fld"><label for="f-time">เวลา</label><input id="f-time" type="time" value="'+esc(/^\d\d:\d\d$/.test(form.time)?form.time:"")+'"></div>'+
@@ -757,13 +757,23 @@ function readForm(){
 function renderTabs(){
   $("#tabs").innerHTML=["view","bk","sc","dy"].map(function(k){var n=k==="bk"?bk.length:k==="sc"?sc.length:0;return '<button class="tab" role="tab" data-tab="'+k+'" aria-selected="'+(tab===k)+'">'+TABNAME[k]+(n?'<small>'+n+'</small>':'')+'</button>'}).join("");
 }
+var scMode="week",scCycle="",scCyc=[],scCycUnsub=null,scCycKey="";
+function scCycSub(){
+  if(!db||!scCycle||scCycKey===scCycle)return;scCycKey=scCycle;if(scCycUnsub)scCycUnsub();scCyc=[];
+  var c=cycleOf(scCycle);
+  scCycUnsub=db.collection(COLL.sc).where("date",">=",c.a).where("date","<=",c.b).onSnapshot(function(s){scCyc=s.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o});
+    var ae=document.activeElement;if(ae&&ae.closest&&ae.closest("#days")&&(ae.tagName==="INPUT"||ae.tagName==="SELECT")){dirty=true;return}if(tab==="sc")render()},function(){});
+}
 function moneyHtml(kind){
-  var list=(kind==="bk"?bk:sc).slice().sort(sortMoney),t=mTotals(list),L=TABNAME[kind];
-  var h='<div class="sum"><h2>รวม '+L+' สัปดาห์นี้<span>'+t.n+' รายการ</span></h2><div class="vcs"><span class="vc"><b>ยอดที่เข้า</b><span class="n">'+fm(t.gross)+'</span></span><span class="vc"><b>หลังหัก VAT 7%</b><span class="n">'+fm(t.net)+'</span></span><span class="vc"><b>VAT 7%</b><span class="n">'+fm(t.vat)+'</span></span><span class="vc"><b>Co-agent</b><span class="n">'+t.co+'</span></span></div></div>'+'<div class="mhead"><div><b>'+L+'</b> <span class="cnt">'+rangeLabel(ws)+' · Net = (Commission − ส่วนลด − Promotion) ÷ 1.07 × (100% − % Co-agent)</span></div><div class="nav"><button class="btn" data-mxls="'+kind+'">'+(kind==="sc"?"ดึง Report ค่าคอม (Excel)":"Export Excel รายเดือน")+'</button><button class="btn primary" data-madd="'+kind+'">+ เพิ่ม '+L+'</button></div></div>';
+  var cyc=kind==="sc"&&scMode==="cycle";
+  if(cyc){if(!scCycle)scCycle=cycleMonthFor(new Date());scCycSub()}
+  var list=(cyc?scCyc:(kind==="bk"?bk:sc)).slice().sort(sortMoney),t=mTotals(list),L=TABNAME[kind];
+  var cc=cyc?cycleOf(scCycle):null,rangeTxt=cyc?("รอบ "+TH_MS[cc.m]+" "+(cc.y+543)+" ("+beDate(cc.a)+" – "+beDate(cc.b)+")"):rangeLabel(ws);
+  var h=(kind==="sc"?'<div class="mhead" style="margin-bottom:10px"><div class="nav"><button class="btn'+(cyc?'':' primary')+'" data-scmode="week">ดูรายสัปดาห์</button><button class="btn'+(cyc?' primary':'')+'" data-scmode="cycle">ดูรอบค่าคอม (26–25)</button>'+(cyc?'<button class="btn" data-sccyc="-1" aria-label="รอบก่อน">◀</button><input class="btn" type="month" id="sc-cycle" value="'+scCycle+'" aria-label="รอบค่าคอมเดือน"><button class="btn" data-sccyc="1" aria-label="รอบถัดไป">▶</button>':'')+'</div></div>':'')+'<div class="sum"><h2>รวม '+L+' '+(cyc?rangeTxt:'สัปดาห์นี้')+'<span>'+t.n+' รายการ</span></h2><div class="vcs"><span class="vc"><b>ยอดที่เข้า</b><span class="n">'+fm(t.gross)+'</span></span><span class="vc"><b>หลังหัก VAT 7%</b><span class="n">'+fm(t.net)+'</span></span><span class="vc"><b>VAT 7%</b><span class="n">'+fm(t.vat)+'</span></span><span class="vc"><b>Co-agent</b><span class="n">'+t.co+'</span></span></div></div>'+'<div class="mhead"><div><b>'+L+'</b> <span class="cnt">'+rangeTxt+' · Net = (Commission − ส่วนลด − Promotion) ÷ 1.07 × (100% − % Co-agent)</span></div><div class="nav"><button class="btn" data-mxls="'+kind+'">'+(kind==="sc"?"ดึง Report ค่าคอม (Excel)":"Export Excel รายเดือน")+'</button><button class="btn primary" data-madd="'+kind+'">+ เพิ่ม '+L+'</button></div></div>';
   if(!db)h+='<div class="note">ล็อกอินด้วยบัญชีทีมก่อน จึงจะเห็นและแก้ไขได้</div>';
   h+='<div class="tw"><table class="mt"><thead><tr><th>วัน</th><th>เซลล์</th><th>ลูกค้า / โครงการ</th><th class="num">Commission เต็ม (บาท)</th><th>Co-agent</th><th class="num">Net หลังหัก VAT</th><th class="num">VAT 7%</th><th></th></tr></thead><tbody>';
   if(!list.length)h+='<tr><td colspan="8" class="cnt">ยังไม่มีรายการ'+(db?' กด "+ เพิ่ม '+L+'" เพื่อลงยอด':'')+'</td></tr>';
-  list.forEach(function(a){var net=netRow(a);h+='<tr><td>'+dayLabel(parse(a.date))+'</td><td>'+esc(a.agent)+'</td><td>'+esc([(a.dtype?a.dtype+" · ":"")+(a.cust?"K."+a.cust:""),a.proj].filter(Boolean).join(" · "))+'</td><td class="num">'+fm(a.amount||0)+'</td><td>'+((a.co||Number(a.coPct)>0)?'<span class="co">Co-agent'+(Number(a.coPct)>0?' '+a.coPct+'%':'')+'</span>':'ไม่ใช่')+'</td><td class="num">'+fm(net)+'</td><td class="num">'+fm(vatRow(a))+'</td><td style="white-space:nowrap">'+(kind==="bk"?(a.converted?'<span class="done">✓ Success แล้ว</span> ':'<button class="ib go" data-tosc="'+esc(a.id)+'">→ Success</button> '):'')+(kind==="sc"&&a.fromBk?'<span class="done">จาก Booking</span> ':'')+'<button class="ib" data-medit="'+esc(a.id)+'">แก้ไข</button></td></tr>'});
+  list.forEach(function(a){var net=netRow(a);h+='<tr><td>'+dayLabel(parse(a.date))+(kind==="sc"?'<span class="cnt" style="display:block;font-size:11.5px">'+(a.dtype==="เช่า"?(a.basis==="movein"?"วัน Move in":"วันทำสัญญา"):"วันโอน")+'</span>':'')+'</td><td>'+esc(a.agent)+'</td><td>'+esc([(a.dtype?a.dtype+" · ":"")+(a.cust?"K."+a.cust:""),a.proj].filter(Boolean).join(" · "))+'</td><td class="num">'+fm(a.amount||0)+'</td><td>'+((a.co||Number(a.coPct)>0)?'<span class="co">Co-agent'+(Number(a.coPct)>0?' '+a.coPct+'%':'')+'</span>':'ไม่ใช่')+'</td><td class="num">'+fm(net)+'</td><td class="num">'+fm(vatRow(a))+'</td><td style="white-space:nowrap">'+(kind==="bk"?(a.converted?'<span class="done">✓ Success แล้ว</span> ':'<button class="ib go" data-tosc="'+esc(a.id)+'">→ Success</button> '):'')+(kind==="sc"&&a.fromBk?'<span class="done">จาก Booking</span> ':'')+'<button class="ib" data-medit="'+esc(a.id)+'">แก้ไข</button></td></tr>'});
   h+='</tbody>'+(list.length?'<tfoot><tr><td colspan="3">รวม '+t.n+' รายการ (Co-agent '+t.co+')</td><td class="num">'+fm(t.gross)+'</td><td></td><td class="num">'+fm(t.net)+'</td><td class="num">'+fm(t.vat)+'</td><td></td></tr></tfoot>':'')+'</table></div>';
   return h;
 }
@@ -775,9 +785,16 @@ function openMoney(kind,a,dateKey,prefill){
   $("#modal").innerHTML='<div class="back" id="back"><div class="modal" style="max-width:640px" role="dialog" aria-modal="true" aria-label="'+L+'"><h3>'+(isNew?"เพิ่ม ":"แก้ไข ")+L+'</h3>'+(isNew&&form.fromBk?'<p class="help" style="margin:-4px 0 12px">ดึงข้อมูลจาก Booking มาให้แล้ว เช็กวันที่ทำสัญญาและยอด Commission ก่อนบันทึก</p>':'')+'<div class="grid">'+
    '<div class="fld"><label>ประเภทดีล</label><div class="seg"><button type="button" data-dt="ขาย" aria-pressed="'+(form.dtype!=="เช่า")+'">ขาย</button><button type="button" data-dt="เช่า" aria-pressed="'+(form.dtype==="เช่า")+'">เช่า</button></div></div>'+
    '<div class="fld"><label for="m-agent">เซลล์ (เจ้าของรายงาน)</label><select id="m-agent"><option value="">เลือกชื่อ</option>'+agentList(form.agent).filter(function(x){return x!==TEAM}).map(function(x){return '<option'+(x===form.agent?" selected":"")+'>'+esc(x)+'</option>'}).join("")+'</select></div>'+
-   '<div class="fld"><label for="m-date">วันที่ทำสัญญา</label><select id="m-date">'+dopts+'</select></div>'+
-   f("m-xfer","วันโอน (เคสขาย)",form.xfer,"date",{attr:'data-only="ขาย"'})+
-   f("m-term","ระยะเวลาสัญญา (เคสเช่า) เช่น 1 ปี",form.term,"text",{attr:'data-only="เช่า"'})+
+   (kind==="sc"?
+     f("m-cdate","วันที่ทำสัญญา / Booking",form.cdate,"date")+
+     f("m-xfer","วันโอน = วันที่ Success",form.xfer,"date",{attr:'data-only="ขาย"'})+
+     f("m-movein","วัน Move in",form.movein,"date",{attr:'data-only="เช่า"'})+
+     '<div class="fld" data-only="เช่า"><label for="m-basis">นับเป็น Success วันไหน</label><select id="m-basis"><option value="booking"'+(form.basis!=="movein"?" selected":"")+'>วันทำสัญญา / Booking</option><option value="movein"'+(form.basis==="movein"?" selected":"")+'>วัน Move in</option></select></div>'+
+     f("m-term","ระยะเวลาสัญญา เช่น 1 ปี",form.term,"text",{attr:'data-only="เช่า"'})+
+     '<div class="fld full"><label>วันที่ Success (ใช้นับยอดและรอบค่าคอม)</label><div class="prev" id="m-scdate"></div></div>'
+   :f("m-date","วันที่ Booking",form.date,"date")+
+     f("m-xfer","วันโอน (เคสขาย)",form.xfer,"date",{attr:'data-only="ขาย"'})+
+     f("m-term","ระยะเวลาสัญญา (เคสเช่า) เช่น 1 ปี",form.term,"text",{attr:'data-only="เช่า"'}))+
    f("m-cid","Contract ID",form.cid)+f("m-cx","รหัส CX",form.cx)+
    f("m-proj","โครงการ",form.proj,"text",{full:1})+
    f("m-price","ราคา (บาท)",form.price,"number")+f("m-phone","เบอร์โทรลูกค้า",form.phone)+
@@ -792,8 +809,13 @@ function openMoney(kind,a,dateKey,prefill){
 }
 function readMoney(){
   var num=function(id){var v=$(id).value;return v===""?"":Number(v)},txt=function(id){return $(id).value.trim()};
-  form.date=$("#m-date").value;form.agent=$("#m-agent").value;form.cust=txt("#m-cust").replace(/^K[.'’]?\s*/i,"");form.proj=txt("#m-proj");
-  form.xfer=$("#m-xfer").value;form.term=txt("#m-term");form.cid=txt("#m-cid");form.cx=txt("#m-cx");form.phone=txt("#m-phone");
+  if(formKind==="sc"){
+    form.cdate=$("#m-cdate").value;form.movein=$("#m-movein").value;form.basis=$("#m-basis").value;form.xfer=$("#m-xfer").value;
+    form.date=(form.dtype==="เช่า")?(form.basis==="movein"?form.movein:form.cdate):form.xfer;
+    var sd=$("#m-scdate");if(sd)sd.textContent=form.date?dayLabel(parse(form.date))+" "+parse(form.date).getFullYear()+" · รอบค่าคอม "+TH_MS[Number(cycleMonthFor(parse(form.date)).split("-")[1])-1]+" "+(Number(cycleMonthFor(parse(form.date)).split("-")[0])+543):(form.dtype==="เช่า"?(form.basis==="movein"?"ใส่วัน Move in":"ใส่วันที่ทำสัญญา"):"ใส่วันโอน");
+  }else form.date=$("#m-date").value;
+  form.agent=$("#m-agent").value;form.cust=txt("#m-cust").replace(/^K[.'’]?\s*/i,"");form.proj=txt("#m-proj");
+  if(formKind!=="sc")form.xfer=$("#m-xfer").value;form.term=txt("#m-term");form.cid=txt("#m-cid");form.cx=txt("#m-cx");form.phone=txt("#m-phone");
   form.price=num("#m-price");form.amount=num("#m-amount");form.disc=num("#m-disc");form.promo=num("#m-promo");form.coPct=num("#m-copct");
   form.sale=txt("#m-sale");form.stock=txt("#m-stock");form.pm=txt("#m-pm");form.note=txt("#m-note");form.co=Number(form.coPct)>0;
   document.querySelectorAll("#modal [data-only]").forEach(function(el){el.style.display=el.getAttribute("data-only")===(form.dtype||"ขาย")?"":"none"});
@@ -895,7 +917,7 @@ function openExport(kind){
    '<div class="fld"><label for="x-month">รอบค่าคอมเดือน</label><input id="x-month" type="month" value="'+mv+'"><small class="cnt" id="x-range"></small></div>'+
    '<div class="fld"><label for="x-agent">รายงานของ</label><select id="x-agent">'+names.map(function(x){return '<option'+(x===me?" selected":"")+'>'+esc(x)+'</option>'}).join("")+'<option value="">ทุกคน (แยกชีตละคน)</option></select></div>'+
    '<div class="fld full"><label for="x-full">ชื่อ-นามสกุลในรายงาน (เช่น นายรัฐธรรม ภาคนาม)</label><input id="x-full" type="text" value="'+esc(fullNameOf(me||names[0]))+'"></div>'+
-   '<div class="fld full"><label for="x-basis">นับรายการตาม</label><select id="x-basis"><option value="date">วันที่ทำสัญญา</option><option value="xfer">วันโอน (เคสขาย)</option></select></div>'+
+   '<input type="hidden" id="x-basis" value="date">'+
    '</div><p class="help">รอบค่าคอมตัดทุกวันที่ 25 เช่น รอบ ต.ค. = 26 ก.ย. – 25 ต.ค. รายงานของแต่ละคนรวมทุกดีลที่เขาเป็นเซลล์เจ้าของรายการ หรือมีชื่อเป็น Sale / Stock / PM</p><div class="mact"><button class="btn" id="cancel">ยกเลิก</button><button class="btn primary" id="xgo">ดาวน์โหลด Excel</button></div></div></div>';
   showRange();
 }
@@ -941,8 +963,8 @@ async function exportXlsx(kind,month,agent,fullName,basis){
     sh.getRow(5).height=22.5;sh.getRow(6).height=22.5;
     var r=7;
     groups[name].forEach(function(x){
-      var rem=["Sale: "+(x.sale||"-"),"Stock: "+(x.stock||"-"),"Pm: "+(x.pm||"-")].join(" / ")+(x.note?" / "+x.note:"");
-      var vals=[x.dtype||"ขาย",beDate(x.date),x.dtype==="เช่า"?"":beDate(x.xfer),x.dtype==="เช่า"?(x.term||""):"",x.cid||"",x.cx||"",x.proj||"",
+      var rem=["Sale: "+(x.sale||"-"),"Stock: "+(x.stock||"-"),"Pm: "+(x.pm||"-")].join(" / ")+(x.dtype==="เช่า"&&x.movein?" / Move in "+beDate(x.movein):"")+(x.note?" / "+x.note:"");
+      var vals=[x.dtype||"ขาย",beDate(x.cdate||x.date),x.dtype==="เช่า"?"":beDate(x.xfer),x.dtype==="เช่า"?(x.term||""):"",x.cid||"",x.cx||"",x.proj||"",
         x.price===""||x.price==null?null:Number(x.price),x.cust||"",x.phone||"",Number(x.amount)||0,vatRow(x),
         x.disc===""||x.disc==null?null:Number(x.disc),x.promo===""||x.promo==null?null:Number(x.promo),
         x.coPct===""||x.coPct==null||Number(x.coPct)===0?null:Number(x.coPct)/100,netRow(x),rem];
@@ -1031,18 +1053,22 @@ document.addEventListener("click",function(e){
   var ma=t.closest("[data-madd]");if(ma){openMoney(ma.getAttribute("data-madd"),null);return}
   var mx=t.closest("[data-mxls]");if(mx){openExport(mx.getAttribute("data-mxls"));return}
   if(t.id==="xgo"){exportXlsx($("#x-kind").value,$("#x-month").value,$("#x-agent").value,$("#x-full").value.trim(),$("#x-basis").value);return}
+  var smo=t.closest("[data-scmode]");if(smo){scMode=smo.getAttribute("data-scmode");render();return}
+  var scs=t.closest("[data-sccyc]");if(scs){var pp=scCycle.split("-"),nd=new Date(Number(pp[0]),Number(pp[1])-1+Number(scs.getAttribute("data-sccyc")),1);scCycle=nd.getFullYear()+"-"+pad(nd.getMonth()+1);render();return}
   var ts=t.closest("[data-tosc]");if(ts){var b0=bk.find(function(x){return x.id===ts.getAttribute("data-tosc")});if(b0){
-    var pre=Object.assign({},b0);["id","created","converted","scDate"].forEach(function(k){delete pre[k]});pre.fromBk=b0.id;
+    var pre=Object.assign({},b0);["id","created","converted","scDate"].forEach(function(k){delete pre[k]});pre.fromBk=b0.id;pre.cdate=b0.date;pre.basis="booking";
     var td=iso(new Date()),inW=td>=iso(ws)&&td<=iso(addDays(ws,6));pre.date=inW?td:(b0.date||iso(ws));
     openMoney("sc",null,pre.date,pre)}return}
-  var me=t.closest("[data-medit]");if(me){var it=(tab==="bk"?bk:sc).find(function(x){return x.id===me.getAttribute("data-medit")});if(it)openMoney(tab,it);return}
+  var me=t.closest("[data-medit]");if(me){var it=(tab==="bk"?bk:sc.concat(scCyc)).find(function(x){return x.id===me.getAttribute("data-medit")});if(it)openMoney(tab,it);return}
   var dt=t.closest("[data-dt]");if(dt&&form&&formKind!=="appt"){form.dtype=dt.getAttribute("data-dt");document.querySelectorAll("[data-dt]").forEach(function(x){x.setAttribute("aria-pressed",String(x===dt))});readMoney();return}
   var co=t.closest("[data-co]");if(co&&form&&formKind!=="appt"){form.co=co.getAttribute("data-co")==="1";document.querySelectorAll("[data-co]").forEach(function(x){x.setAttribute("aria-pressed",String(x===co))});return}
   if(t.id==="msave"){
     readMoney();
     if(!form.agent){toast("เลือกเซลล์ก่อน");return}
     if(form.amount===""||isNaN(form.amount)||form.amount<=0){toast("ใส่ Commission เต็ม");return}
+    if(!form.date){toast(formKind!=="sc"?"ใส่วันที่ Booking":form.dtype==="เช่า"?(form.basis==="movein"?"ใส่วัน Move in":"ใส่วันที่ทำสัญญา"):"ใส่วันโอน (วันที่ Success)");return}
     var mid=form.id,mp={date:form.date,agent:form.agent,dtype:form.dtype||"ขาย",xfer:form.xfer||"",term:form.term||"",cid:form.cid||"",cx:form.cx||"",proj:form.proj,price:form.price,cust:form.cust,phone:form.phone||"",amount:form.amount,disc:form.disc,promo:form.promo,coPct:form.coPct,co:!!form.co,sale:form.sale||"",stock:form.stock||"",pm:form.pm||"",note:form.note||""};
+    if(formKind==="sc"){mp.cdate=form.cdate||"";mp.movein=form.movein||"";mp.basis=form.basis||"booking"}
     if(formKind==="sc"&&form.fromBk)mp.fromBk=form.fromBk;
     t.disabled=true;
     var srcBk=(!mid&&formKind==="sc"&&form.fromBk)?form.fromBk:null,sDate=form.date;
@@ -1083,6 +1109,7 @@ document.addEventListener("change",function(e){
   if(t.id==="agentf"){fAgent=t.value;render();return}
   if(t.id==="x-agent"){$("#x-full").value=fullNameOf(t.value);return}
   if(t.id==="dy-date"){if(t.value)dyGo(t.value);return}
+  if(t.id==="sc-cycle"){if(t.value){scCycle=t.value;render()}return}
   if(t.hasAttribute&&t.hasAttribute("data-dy")){var k=t.getAttribute("data-dy"),n=t.getAttribute("data-ag"),v=t.value;var pt={};
     pt[k]=(k==="note"||k==="status")?v.trim():(v===""?"":Math.max(0,Math.round(Number(v))||0));
     if(k==="status"){t.className=v!=="ทำงาน"?"off":"";var tr=t.closest("tr");if(tr)tr.className=v!=="ทำงาน"?"offrow":""}
