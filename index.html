@@ -730,7 +730,7 @@ var form=null;
 function openForm(a,dateKey){
   var isNew=!a;formKind="appt";
   form=a?Object.assign({},a):{date:dateKey||iso(ws),time:"",agent:"",rs:"R",act:"View",cust:"",proj:"",budget:"",status:"นัดแล้ว",progress:"",follow:""};
-  if(kind==="sc"){form.cdate=form.cdate||form.date;form.basis=form.basis||"booking"}
+  var dopts="";for(var i=0;i<7;i++){var d=addDays(ws,i);dopts+='<option value="'+iso(d)+'"'+(iso(d)===form.date?" selected":"")+'>'+dayLabel(d)+'</option>'}
   var h='<div class="back" id="back"><div class="modal" role="dialog" aria-modal="true" aria-label="นัดดูห้อง"><h3>'+(isNew?"เพิ่มนัด":"แก้ไขนัด")+'</h3><div class="grid">'+
    '<div class="fld"><label for="f-date">วัน</label><select id="f-date">'+dopts+'</select></div>'+
    '<div class="fld"><label for="f-time">เวลา</label><input id="f-time" type="time" value="'+esc(/^\d\d:\d\d$/.test(form.time)?form.time:"")+'"></div>'+
@@ -780,7 +780,7 @@ function moneyHtml(kind){
 function openMoney(kind,a,dateKey,prefill){
   var isNew=!a;formKind=kind;var L=TABNAME[kind];
   form=a?Object.assign({},a):Object.assign({date:dateKey||iso(ws),agent:"",dtype:"ขาย",cust:"",proj:"",amount:"",co:false},prefill||{});
-  var dopts="";for(var i=0;i<7;i++){var d=addDays(ws,i);dopts+='<option value="'+iso(d)+'"'+(iso(d)===form.date?" selected":"")+'>'+dayLabel(d)+'</option>'}
+  if(kind==="sc"){form.cdate=form.cdate||form.date;form.basis=form.basis||"booking"}
   var f=function(id,label,val,type,extra){return '<div class="fld'+(extra&&extra.full?' full':'')+'"'+(extra&&extra.attr?' '+extra.attr:'')+'><label for="'+id+'">'+label+'</label><input id="'+id+'" type="'+(type||"text")+'"'+(extra&&extra.list?' list="ag-list" autocomplete="off"':'')+''+(type==="number"?' inputmode="decimal" min="0" step="any"':'')+' value="'+esc(val==null?"":val)+'"></div>'};
   $("#modal").innerHTML='<div class="back" id="back"><div class="modal" style="max-width:640px" role="dialog" aria-modal="true" aria-label="'+L+'"><h3>'+(isNew?"เพิ่ม ":"แก้ไข ")+L+'</h3>'+(isNew&&form.fromBk?'<p class="help" style="margin:-4px 0 12px">ดึงข้อมูลจาก Booking มาให้แล้ว เช็กวันที่ทำสัญญาและยอด Commission ก่อนบันทึก</p>':'')+'<div class="grid">'+
    '<div class="fld"><label>ประเภทดีล</label><div class="seg"><button type="button" data-dt="ขาย" aria-pressed="'+(form.dtype!=="เช่า")+'">ขาย</button><button type="button" data-dt="เช่า" aria-pressed="'+(form.dtype==="เช่า")+'">เช่า</button></div></div>'+
