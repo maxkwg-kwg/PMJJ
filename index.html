@@ -37,6 +37,7 @@ body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);
 .appnav button{border:0;background:transparent;color:var(--muted);font:600 14px var(--body);padding:8px 14px;border-radius:7px;cursor:pointer;min-height:38px}
 .appnav button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
 .appnav button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:820px){input,select,textarea{font-size:16px!important}}
 .am-back{position:fixed;inset:0;background:rgba(10,16,22,.55);display:flex;align-items:flex-start;justify-content:center;padding:max(16px,env(safe-area-inset-top,0px)) 16px 16px;overflow:auto;z-index:40}
 .am{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:14px;width:100%;max-width:720px;padding:20px;margin:auto;font:14px/1.5 var(--body)}
 .am h3{font:600 18px var(--display);margin:0 0 4px}
@@ -250,7 +251,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 <body>
 
 <div class="shell">
-  <div class="brand">Team Activity<small>ทีมจ๊ะจ๋า · ตารางวิวและเครื่องคิดเลขราคาขาย</small></div>
+  <div class="brand">Team Activity<small>ตารางวิวและเครื่องคิดเลขราคาขาย</small></div>
   <div class="who" id="who" hidden><span id="whoName"></span><button class="btn-lo" id="members" hidden>จัดการสมาชิก</button><button class="btn-lo" id="logout">ออกจากระบบ</button></div>
   <div class="appnav" role="tablist" aria-label="ส่วนของแอป">
     <button role="tab" id="nav-views" aria-controls="pane-views">ตารางวิว</button>
@@ -259,7 +260,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 </div>
 <section class="vs" id="pane-views">
 <div class="authcard" id="authcard" hidden>
-  <h2>เข้าสู่ระบบทีมจ๊ะจ๋า</h2>
+  <h2>เข้าสู่ระบบ Team Activity</h2>
   <p class="ahelp">ใส่ชื่อผู้ใช้และรหัสผ่านของทีม</p>
   <form id="authform" novalidate>
     <label for="a-email">ชื่อผู้ใช้</label><input id="a-email" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required>
@@ -998,7 +999,7 @@ async function exportXlsx(kind,month,agent,fullName,basis){
   });
   var buf=await wb.xlsx.writeBuffer();
   var url=URL.createObjectURL(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
-  var aEl=document.createElement("a");aEl.href=url;aEl.download=(kind==="sc"?"Commission":"Booking")+"_"+(agent||"ทีมจ๊ะจ๋า")+"_"+TH_MS[m]+(y+543)+".xlsx";
+  var aEl=document.createElement("a");aEl.href=url;aEl.download=(kind==="sc"?"Commission":"Booking")+"_"+(agent||"Team Activity")+"_"+TH_MS[m]+(y+543)+".xlsx";
   document.body.appendChild(aEl);aEl.click();aEl.remove();setTimeout(function(){URL.revokeObjectURL(url)},4000);
   closeForm();toast("Export แล้ว");
 }
