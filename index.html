@@ -131,6 +131,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 .vs select.agentf{margin-left:0}}
 .vs .back{position:fixed;inset:0;background:rgba(10,16,22,.55);display:flex;align-items:flex-start;justify-content:center;padding:max(16px,env(safe-area-inset-top,0px)) 16px 16px;overflow:auto;z-index:20}
 .vs .modal{background:var(--surface);border:1px solid var(--line);border-radius:12px;width:100%;max-width:560px;padding:18px;margin:auto}
+.vs .modal.nudge{animation:mnudge .3s}@keyframes mnudge{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}@media (prefers-reduced-motion:reduce){.vs .modal.nudge{animation:none}}
 .vs .modal h3{font-family:var(--f-head);font-weight:600;margin:0 0 12px;font-size:17px}
 .vs .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
 .vs .grid .full{grid-column:1/-1}
@@ -615,6 +616,24 @@ function netRow(x){return r2(baseOf(x)/(1+VAT)*(1-(Number(x.coPct)||0)/100))}
 function vatRow(x){var b=baseOf(x);return r2(b-b/(1+VAT))}
 function fm(n,d){return Number(n).toLocaleString("en-US",{minimumFractionDigits:d==null?2:d,maximumFractionDigits:2})}
 function mTotals(list){var g=0,n=0,v=0,co=0;list.forEach(function(a){g+=Number(a.amount)||0;n+=netRow(a);v+=vatRow(a);if(a.co||Number(a.coPct)>0)co++});return{n:list.length,gross:r2(g),net:r2(n),vat:r2(v),co:co}}
+var NOSTOCK=/^(|-|–|บริษัท|บ\.|company)$/i,NOPM=/^(|-|–|ไม่มี|none)$/i;
+function splitOf(x){
+  var base=netRow(x),closer=String(x.sale||"").trim()||x.agent||"-",st=String(x.stock||"").trim(),pm=String(x.pm||"").trim();
+  if(NOSTOCK.test(st))st="";if(NOPM.test(pm))pm="";if(st&&pm&&st===pm)pm="";
+  var parts=[],rule;
+  if(st&&pm){parts.push([st,"Stock",15],[pm,"PM",15]);rule="Stock เซลล์ + PM"}
+  else if(st){parts.push([st,"Stock",30]);rule="Stock เซลล์ ไม่มี PM"}
+  else if(pm){parts.push([pm,"PM",15]);rule="Stock บริษัท + PM"}
+  else rule="Stock บริษัท ไม่มี PM";
+  var used=parts.reduce(function(a,q){return a+q[2]},0);parts.push([closer,"ปิดการขาย",100-used]);
+  var m={},o=[];parts.forEach(function(q){if(!m[q[0]]){m[q[0]]={name:q[0],roles:[],pct:0};o.push(m[q[0]])}m[q[0]].roles.push(q[1]);m[q[0]].pct+=q[2]});
+  var sum=0;o.forEach(function(r){r.amt=r2(base*r.pct/100);sum+=r.amt});
+  var cl=o.filter(function(r){return r.roles.indexOf("ปิดการขาย")>=0})[0];cl.amt=r2(cl.amt+base-sum);
+  return {base:base,rows:o,rule:rule};
+}
+window.__splitOf=splitOf;
+function splitTxt(sp){return sp.rows.map(function(r){return r.name+" "+r.pct+"%"}).join(" · ")}
+function splitTotals(list){var t={},o=[];list.forEach(function(x){splitOf(x).rows.forEach(function(r){if(!(r.name in t)){t[r.name]=0;o.push(r.name)}t[r.name]=r2(t[r.name]+r.amt)})});return o.sort(function(a,b){return t[b]-t[a]}).map(function(n){return [n,t[n]]})}
 function sortMoney(a,b){return a.date<b.date?-1:a.date>b.date?1:(a.created||0)-(b.created||0)}
 function viewStats(list){
   var m={},total=0;
@@ -746,7 +765,7 @@ function openForm(a,dateKey){
    '<div class="fld full"><label for="f-follow">ติดตามต่อ (วันที่ / สิ่งที่ต้องทำ)</label><input id="f-follow" type="text" value="'+esc(form.follow)+'"></div>'+
    '<div class="fld full"><label>ข้อความที่ได้</label><div class="prev" id="prev-msg"></div></div></div>'+
    '<div class="mact">'+(isNew?'':'<button class="btn danger left" id="del">ลบนัดนี้</button>')+'<button class="btn" id="cancel">ยกเลิก</button><button class="btn primary" id="saveb">บันทึก</button></div></div></div>';
-  $("#modal").innerHTML=h;readForm();
+  $("#modal").innerHTML=h;readForm();formSnap=JSON.stringify(form);
   setTimeout(function(){var f=$(isNew?"#f-agent":"#f-progress");f&&f.focus()},0);
 }
 function readForm(){
@@ -770,11 +789,11 @@ function cycLabel(m){var c=cycleOf(m);return "รอบ "+TH_MS[c.m]+" "+(c.y+54
 function moneyHtml(kind){
   cycSub(kind);
   var list=cyc[kind].slice().sort(sortMoney),t=mTotals(list),L=TABNAME[kind],rangeTxt=cycLabel(mCycle);
-  var h='<div class="mhead" style="margin-bottom:10px"><div class="nav"><button class="btn" data-sccyc="-1" aria-label="เดือนก่อน">◀</button><input class="btn" type="month" id="sc-cycle" value="'+mCycle+'" aria-label="เลือกเดือน"><button class="btn" data-sccyc="1" aria-label="เดือนถัดไป">▶</button><button class="btn" id="sc-now">เดือนนี้</button></div><span class="cnt">นับรอบวันที่ 26 – 25</span></div>'+'<div class="sum"><h2>รวม '+L+' '+rangeTxt+'<span>'+t.n+' รายการ</span></h2><div class="vcs"><span class="vc"><b>ยอดที่เข้า</b><span class="n">'+fm(t.gross)+'</span></span><span class="vc"><b>หลังหัก VAT 7%</b><span class="n">'+fm(t.net)+'</span></span><span class="vc"><b>VAT 7%</b><span class="n">'+fm(t.vat)+'</span></span><span class="vc"><b>Co-agent</b><span class="n">'+t.co+'</span></span></div></div>'+'<div class="mhead"><div><b>'+L+'</b> <span class="cnt">'+rangeTxt+' · Net = (Commission − ส่วนลด − Promotion) ÷ 1.07 × (100% − % Co-agent)</span></div><div class="nav"><button class="btn" data-mxls="'+kind+'">'+(kind==="sc"?"ดึง Report ค่าคอม (Excel)":"Export Excel รายเดือน")+'</button><button class="btn primary" data-madd="'+kind+'">+ เพิ่ม '+L+'</button></div></div>';
+  var h='<div class="mhead" style="margin-bottom:10px"><div class="nav"><button class="btn" data-sccyc="-1" aria-label="เดือนก่อน">◀</button><input class="btn" type="month" id="sc-cycle" value="'+mCycle+'" aria-label="เลือกเดือน"><button class="btn" data-sccyc="1" aria-label="เดือนถัดไป">▶</button><button class="btn" id="sc-now">เดือนนี้</button></div><span class="cnt">นับรอบวันที่ 26 – 25</span></div>'+'<div class="sum"><h2>รวม '+L+' '+rangeTxt+'<span>'+t.n+' รายการ</span></h2><div class="vcs"><span class="vc"><b>ยอดที่เข้า</b><span class="n">'+fm(t.gross)+'</span></span><span class="vc"><b>หลังหัก VAT 7%</b><span class="n">'+fm(t.net)+'</span></span><span class="vc"><b>VAT 7%</b><span class="n">'+fm(t.vat)+'</span></span><span class="vc"><b>Co-agent</b><span class="n">'+t.co+'</span></span></div>'+(list.length?'<div class="vcs" style="margin-top:8px"><span class="cnt" style="align-self:center">ส่วนแบ่งค่าคอมต่อคน (จาก Net)</span>'+splitTotals(list).map(function(q){return '<span class="vc"><b>'+esc(q[0])+'</b><span class="n">'+fm(q[1])+'</span></span>'}).join("")+'</div>':'')+'</div>'+'<div class="mhead"><div><b>'+L+'</b> <span class="cnt">'+rangeTxt+' · Net = (Commission − ส่วนลด − Promotion) ÷ 1.07 × (100% − % Co-agent)</span></div><div class="nav"><button class="btn" data-mxls="'+kind+'">'+(kind==="sc"?"ดึง Report ค่าคอม (Excel)":"Export Excel รายเดือน")+'</button><button class="btn primary" data-madd="'+kind+'">+ เพิ่ม '+L+'</button></div></div>';
   if(!db)h+='<div class="note">ล็อกอินด้วยบัญชีทีมก่อน จึงจะเห็นและแก้ไขได้</div>';
   h+='<div class="tw"><table class="mt"><thead><tr><th>วัน</th><th>เซลล์</th><th>ลูกค้า / โครงการ</th><th class="num">Commission เต็ม (บาท)</th><th>Co-agent</th><th class="num">Net หลังหัก VAT</th><th class="num">VAT 7%</th><th></th></tr></thead><tbody>';
   if(!list.length)h+='<tr><td colspan="8" class="cnt">ยังไม่มีรายการ'+(db?' กด "+ เพิ่ม '+L+'" เพื่อลงยอด':'')+'</td></tr>';
-  list.forEach(function(a){var net=netRow(a);h+='<tr><td>'+dayLabel(parse(a.date))+(kind==="sc"?'<span class="cnt" style="display:block;font-size:11.5px">'+(a.dtype==="เช่า"?(a.basis==="movein"?"วัน Move in":"วันทำสัญญา"):"วันโอน")+'</span>':'')+'</td><td>'+esc(a.agent)+'</td><td>'+esc([(a.dtype?a.dtype+" · ":"")+(a.cust?"K."+a.cust:""),a.proj].filter(Boolean).join(" · "))+'</td><td class="num">'+fm(a.amount||0)+'</td><td>'+((a.co||Number(a.coPct)>0)?'<span class="co">Co-agent'+(Number(a.coPct)>0?' '+a.coPct+'%':'')+'</span>':'ไม่ใช่')+'</td><td class="num">'+fm(net)+'</td><td class="num">'+fm(vatRow(a))+'</td><td style="white-space:nowrap">'+(kind==="bk"?(a.converted?'<span class="done">✓ Success แล้ว</span> ':'<button class="ib go" data-tosc="'+esc(a.id)+'">→ Success</button> '):'')+(kind==="sc"&&a.fromBk?'<span class="done">จาก Booking</span> ':'')+'<button class="ib" data-medit="'+esc(a.id)+'">แก้ไข</button></td></tr>'});
+  list.forEach(function(a){var net=netRow(a);h+='<tr><td>'+dayLabel(parse(a.date))+(kind==="sc"?'<span class="cnt" style="display:block;font-size:11.5px">'+(a.dtype==="เช่า"?(a.basis==="movein"?"วัน Move in":"วันทำสัญญา"):"วันโอน")+'</span>':'')+'</td><td>'+esc(a.agent)+'<span class="cnt" style="display:block;font-size:11.5px">'+esc(splitTxt(splitOf(a)))+'</span></td><td>'+esc([(a.dtype?a.dtype+" · ":"")+(a.cust?"K."+a.cust:""),a.proj].filter(Boolean).join(" · "))+'</td><td class="num">'+fm(a.amount||0)+'</td><td>'+((a.co||Number(a.coPct)>0)?'<span class="co">Co-agent'+(Number(a.coPct)>0?' '+a.coPct+'%':'')+'</span>':'ไม่ใช่')+'</td><td class="num">'+fm(net)+'</td><td class="num">'+fm(vatRow(a))+'</td><td style="white-space:nowrap">'+(kind==="bk"?(a.converted?'<span class="done">✓ Success แล้ว</span> ':'<button class="ib go" data-tosc="'+esc(a.id)+'">→ Success</button> '):'')+(kind==="sc"&&a.fromBk?'<span class="done">จาก Booking</span> ':'')+'<button class="ib" data-medit="'+esc(a.id)+'">แก้ไข</button></td></tr>'});
   h+='</tbody>'+(list.length?'<tfoot><tr><td colspan="3">รวม '+t.n+' รายการ (Co-agent '+t.co+')</td><td class="num">'+fm(t.gross)+'</td><td></td><td class="num">'+fm(t.net)+'</td><td class="num">'+fm(t.vat)+'</td><td></td></tr></tfoot>':'')+'</table></div>';
   return h;
 }
@@ -802,11 +821,12 @@ function openMoney(kind,a,dateKey,prefill){
    f("m-cust","ชื่อลูกค้า (ไม่ต้องใส่ K.)",form.cust,"text",{full:1})+
    f("m-amount","Commission เต็ม รวม VAT (บาท)",form.amount,"number")+f("m-disc","ส่วนลดค่าคอม (บาท)",form.disc,"number")+
    f("m-promo","Promotion ลูกค้า (บาท)",form.promo,"number")+f("m-copct","% แบ่ง Co-agent (ไม่มีเว้นว่าง)",form.coPct,"number")+
-   f("m-sale","Sale",form.sale,"text",{list:1})+f("m-stock","Stock",form.stock,"text",{list:1})+f("m-pm","PM",form.pm,"text",{list:1})+
-   '<datalist id="ag-list">'+agentList().filter(function(x){return x!==TEAM}).map(function(x){return '<option value="'+esc(x)+'">'}).join("")+'</datalist>'+f("m-note","หมายเหตุอื่น",form.note)+'<p class="help full" style="grid-column:1/-1;margin:0">Sale / Stock / PM จะไปอยู่ในช่องหมายเหตุของรายงาน เช่น Sale: Book / Stock: Max / Pm: -</p>'+
-   '<div class="fld full"><label>Net Commission เข้าบริษัท</label><div class="prev" id="m-prev"></div></div></div>'+
+   f("m-sale","Sale (คนปิดการขาย)",form.sale,"text",{list:1})+f("m-stock","Stock (เจ้าของ Stock)",form.stock,"text",{list:1})+f("m-pm","PM (เจ้าของ PM)",form.pm,"text",{list:1})+
+   '<datalist id="ag-list">'+agentList().filter(function(x){return x!==TEAM}).map(function(x){return '<option value="'+esc(x)+'">'}).join("")+'</datalist>'+f("m-note","หมายเหตุอื่น",form.note)+'<p class="help full" style="grid-column:1/-1;margin:0">Sale ว่าง = เซลล์เจ้าของรายงานปิดเอง · Stock ว่าง หรือ "บริษัท" = Stock บริษัท · PM ว่าง หรือ "-" = ไม่มี PM · ยังไปอยู่ในช่องหมายเหตุของรายงานเหมือนเดิม</p>'+
+   '<div class="fld full"><label>Net Commission เข้าบริษัท</label><div class="prev" id="m-prev"></div></div>'+
+   '<div class="fld full"><label>ส่วนแบ่งค่าคอม (คิดจาก Net)</label><div class="prev" id="m-split"></div></div></div>'+
    '<div class="mact">'+(isNew?'':'<button class="btn danger left" id="mdel">ลบรายการนี้</button>')+'<button class="btn" id="cancel">ยกเลิก</button><button class="btn primary" id="msave">บันทึก</button></div></div></div>';
-  readMoney();setTimeout(function(){var el=$(isNew?"#m-agent":"#m-amount");el&&el.focus()},0);
+  readMoney();formSnap=JSON.stringify(form);setTimeout(function(){var el=$(isNew?"#m-agent":"#m-amount");el&&el.focus()},0);
 }
 function readMoney(){
   var num=function(id){var v=$(id).value;return v===""?"":Number(v)},txt=function(id){return $(id).value.trim()};
@@ -822,9 +842,12 @@ function readMoney(){
   document.querySelectorAll("#modal [data-only]").forEach(function(el){el.style.display=el.getAttribute("data-only")===(form.dtype||"ขาย")?"":"none"});
   if(form.amount===""||isNaN(form.amount))$("#m-prev").textContent="ใส่ Commission เต็ม เพื่อดูยอด Net";
   else $("#m-prev").textContent="฿"+fm(netRow(form))+"  (VAT 7% = ฿"+fm(vatRow(form))+")";
+  var ms=$("#m-split");if(ms){if(form.amount===""||isNaN(form.amount))ms.textContent="ใส่ Commission เต็ม เพื่อดูส่วนแบ่ง";
+    else{var sp=splitOf(form);ms.innerHTML='<span class="cnt">'+esc(sp.rule)+'</span>'+sp.rows.map(function(r){return '<div>'+esc(r.name)+' ('+esc(r.roles.join(" + "))+') '+r.pct+'% = ฿'+fm(r.amt)+'</div>'}).join("")}}
 }
 function readAny(){formKind==="appt"?readForm():readMoney()}
-function closeForm(){$("#modal").innerHTML="";form=null;managing=false}
+var formSnap=null;
+function closeForm(){$("#modal").innerHTML="";form=null;managing=false;formSnap=null}
 function openAgents(){
   managing=true;var names=AGENTS.filter(function(x){return x!==TEAM});
   $("#modal").innerHTML='<div class="back" id="back"><div class="modal" role="dialog" aria-modal="true" aria-label="จัดการรายชื่อเซลล์"><h3>จัดการรายชื่อเซลล์</h3><div class="agl">'+
@@ -869,22 +892,25 @@ async function exportJpeg(mode,month){
   }
   try{await document.fonts.load('600 17px "IBM Plex Sans Thai"');await document.fonts.load('500 17px "IBM Plex Sans Thai"')}catch(e){}
   var S=2,P=20,FB='"IBM Plex Sans Thai",Loma,Tahoma,sans-serif';
-  var cols=[["Date",118,"c"],["Name",120,"l"],["View",64,"c"],["Book",64,"c"],["ยอด Booking",138,"r"],["หลังหัก VAT 7%",138,"r"],["Success",76,"c"],["ยอด Success",138,"r"],["หลังหัก VAT 7%",138,"r"]];
+  var cols=[["Date",118,"c"],["Name",120,"l"],["View",64,"c"],["Book",64,"c"],["ค่าคอม Booking",138,"r"],["หลังหัก VAT 7%",138,"r"],["Success",76,"c"],["ค่าคอม Success",138,"r"],["หลังหัก VAT 7%",138,"r"]];
   var TW=cols.reduce(function(n,c){return n+c[1]},0),W=TW+2*P,RH=40,HH=46,TT=56;
   var names=AGENTS.filter(function(x){return x!==TEAM});
   A.concat(B,C).forEach(function(a){if(a.agent&&a.agent!==TEAM&&names.indexOf(a.agent)<0)names.push(a.agent)});
+  B.concat(C).forEach(function(a){splitOf(a).rows.forEach(function(q){if(q.name&&q.name!=="-"&&q.name!==TEAM&&names.indexOf(q.name)<0)names.push(q.name)})});
+  function share(list,n){var g=0,nt=0;list.forEach(function(a){splitOf(a).rows.forEach(function(q){if(q.name===n){g+=(Number(a.amount)||0)*q.pct/100;nt+=q.amt}})});return{g:r2(g),n:r2(nt)}}
   var vs=viewStats(A),vmap={};vs.list.forEach(function(r){vmap[r.agent]=r.view});
   var rows=names.map(function(n){
     var b=B.filter(function(a){return a.agent===n}),c=C.filter(function(a){return a.agent===n});
-    var tb=mTotals(b),tc=mTotals(c);return{n:n,v:vmap[n]||0,b:b.length,c:c.length,bg:tb.gross,bn:tb.net,cg:tc.gross,cn:tc.net};
+    var tb=share(B,n),tc=share(C,n);return{n:n,v:vmap[n]||0,b:b.length,c:c.length,bg:tb.g,bn:tb.n,cg:tc.g,cn:tc.n};
   });
+  window.__jpegRows=rows;
   var tot=rows.reduce(function(t,r){t.v+=r.v;t.b+=r.b;t.c+=r.c;t.bg+=r.bg;t.bn+=r.bn;t.cg+=r.cg;t.cn+=r.cn;return t},{v:0,b:0,c:0,bg:0,bn:0,cg:0,cn:0});
   var dateTxt=dateTxt0;
   var H=P+TT+HH+RH*(rows.length+1)+P;
   var cv=document.createElement("canvas");cv.width=W*S;cv.height=H*S;
   var c=cv.getContext("2d");c.scale(S,S);c.fillStyle="#ffffff";c.fillRect(0,0,W,H);
   var x0=P,y=P;
-  c.fillStyle="#dcdcee";c.fillRect(x0,y,TW,TT);c.fillStyle="#16202b";c.font="600 26px "+FB;c.textAlign="center";c.fillText("Team Activity · "+(mode==="month"?"รายเดือน ":"รายสัปดาห์ ")+label.replace(/ \(.*\)$/,""),x0+TW/2,y+37);y+=TT;
+  c.fillStyle="#dcdcee";c.fillRect(x0,y,TW,TT);c.fillStyle="#16202b";c.font="600 26px "+FB;c.textAlign="center";c.fillText("Team Activity · "+(mode==="month"?"รายเดือน ":"รายสัปดาห์ ")+label.replace(/ \(.*\)$/,"")+" · ค่าคอมหลังแบ่ง Stock/PM",x0+TW/2,y+37);y+=TT;
   var hdrRow=false;
   function cell(i,x,w,txt,font,fill,color){
     if(fill){c.fillStyle=fill;c.fillRect(x,y,w,hdrRow?HH:RH)}
@@ -1108,7 +1134,8 @@ document.addEventListener("click",function(e){
   if(row&&t.closest("[data-edit]")){var a=items.find(function(x){return x.id===row.getAttribute("data-id")});if(a)openForm(a);return}
   if(row&&t.closest("[data-copy]")){var b=items.find(function(x){return x.id===row.getAttribute("data-id")});if(b)copy(line(b));return}
   var rs=t.closest("[data-rs]");if(rs&&form){form.rs=rs.getAttribute("data-rs");document.querySelectorAll("[data-rs]").forEach(function(x){x.setAttribute("aria-pressed",String(x===rs))});readForm();return}
-  if(t.id==="cancel"||t.id==="back"){closeForm();return}
+  if(t.id==="back"){var md=t.querySelector(".modal");if(md){md.classList.remove("nudge");void md.offsetWidth;md.classList.add("nudge")}toast("กด ยกเลิก หรือ บันทึก เพื่อปิดหน้าต่าง");return}
+  if(t.id==="cancel"){closeForm();return}
   if(t.id==="saveb"){
     readForm();
     if(!form.agent){toast("เลือกเซลล์ก่อน");return}
@@ -1142,7 +1169,7 @@ document.addEventListener("change",function(e){
   else if(t.hasAttribute("data-prog")){save(id,{progress:t.value.trim()}).then(function(ok){if(ok)toast("บันทึกความคืบหน้าแล้ว")})}
 });
 document.addEventListener("focusout",function(){setTimeout(function(){var ae=document.activeElement;if(dirty&&!(ae&&ae.closest&&ae.closest("#days")&&(ae.tagName==="INPUT"||ae.tagName==="SELECT"))){dirty=false;render()}},50)});
-document.addEventListener("keydown",function(e){if(e.key==="Escape"&&(form||managing))closeForm();if(e.key==="Enter"&&e.target.id==="newag"){e.preventDefault();addAgent()}});
+document.addEventListener("keydown",function(e){if(e.key==="Escape"&&(form||managing)){if(form&&formSnap!==null){readAny();if(JSON.stringify(form)!==formSnap){toast("มีข้อมูลที่ยังไม่บันทึก กด ยกเลิก หากไม่ต้องการบันทึก");return}}closeForm()}if(e.key==="Enter"&&e.target.id==="newag"){e.preventDefault();addAgent()}});
 $("#agents").onclick=openAgents;
 $("#prev").onclick=function(){go(addDays(ws,-7))};
 $("#next").onclick=function(){go(addDays(ws,7))};
